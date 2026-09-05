@@ -28,13 +28,12 @@ if not MONGODB_URI:
 
 mongo_client = MongoClient(
     MONGODB_URI,
-    maxPoolSize=200,
-    minPoolSize=10,
+    maxPoolSize=100,
+    serverSelectionTimeoutMS=5000,
+    connectTimeoutMS=5000,
+    socketTimeoutMS=10000,
     maxIdleTimeMS=45000,
-    serverSelectionTimeoutMS=8000,
-    connectTimeoutMS=10000,
-    retryWrites=True,
-    w='majority'
+    retryWrites=True
 )
 db_name = os.getenv('MONGODB_DB_NAME', 'findrome_db')
 db = mongo_client[db_name]
@@ -93,23 +92,48 @@ def init_event_defaults():
 
 init_event_defaults()
 
+# In-Memory Cache for High-Concurrency Performance (Sub-millisecond responses)
+_event_cache = {
+    'active_code': None,
+    'settings': {},
+    'all_events': None,
+    'ts': 0
+}
+CACHE_TTL = 60 # seconds
+_indexed_collections = set()
+
+def invalidate_cache():
+    _event_cache['active_code'] = None
+    _event_cache['settings'].clear()
+    _event_cache['all_events'] = None
+    _event_cache['ts'] = 0
+
 def get_active_event_code():
-    """Retrieve the currently active event code slug."""
+    """Retrieve the currently active event code slug (cached in-memory)."""
+    now = time.time()
+    if _event_cache['active_code'] and (now - _event_cache['ts'] < CACHE_TTL):
+        return _event_cache['active_code']
     try:
         cfg = event_settings_col.find_one({'_id': 'active_event_config'})
         if cfg and cfg.get('active_event_code'):
+            _event_cache['active_code'] = cfg['active_event_code']
+            _event_cache['ts'] = now
             return cfg['active_event_code']
     except Exception:
         pass
     return 'findrome_2026'
 
 def get_event_settings(event_code=None):
-    """Get event configuration document from events_master."""
+    """Get event configuration document from memory cache or events_master."""
     if not event_code:
         event_code = get_active_event_code()
+    now = time.time()
+    if event_code in _event_cache['settings'] and (now - _event_cache['ts'] < CACHE_TTL):
+        return _event_cache['settings'][event_code]
     try:
         ev = events_master_col.find_one({'_id': event_code})
         if ev:
+            _event_cache['settings'][event_code] = ev
             return ev
     except Exception as e:
         print(f"Error getting event settings for {event_code}: {e}")
@@ -118,7 +142,7 @@ def get_event_settings(event_code=None):
 def get_registrations_col(event_code=None):
     """
     Returns the isolated MongoDB collection for the specified or active event.
-    Guarantees that each event has its own clean registration pool and unique indexes!
+    Only indexes once per worker process to eliminate network latency!
     """
     if not event_code:
         event_code = get_active_event_code()
@@ -127,34 +151,38 @@ def get_registrations_col(event_code=None):
     col_name = ev.get('collection_name') or ('registrations' if event_code == 'findrome_2026' else f"registrations_{event_code}")
     col = db[col_name]
     
-    # Initialize sub-millisecond unique indexes for this event's collection
-    try:
-        col.create_index([('sap_id', ASCENDING)], unique=True)
-        col.create_index([('registration_id', ASCENDING)], unique=True)
-        col.create_index([('email', ASCENDING)])
-    except Exception:
-        pass
+    # Initialize indexes ONCE per collection, not on every request
+    if col_name not in _indexed_collections:
+        try:
+            col.create_index([('sap_id', ASCENDING)], unique=True)
+            col.create_index([('registration_id', ASCENDING)], unique=True)
+            col.create_index([('email', ASCENDING)])
+            _indexed_collections.add(col_name)
+        except Exception:
+            pass
     return col
 
 @app.context_processor
 def inject_event_settings():
-    """Inject active event details and all events list into every Jinja template."""
+    """Inject active event details and all events list into every Jinja template (lightning-fast)."""
     active_code = get_active_event_code()
     active_ev = get_event_settings(active_code)
-    try:
-        all_events_cursor = events_master_col.find().sort([('created_at', -1)])
-        all_events = []
-        for ev in all_events_cursor:
-            d = dict(ev)
-            d['_id'] = str(d['_id'])
-            try:
-                d['attendee_count'] = get_registrations_col(d.get('event_code')).count_documents({})
-            except Exception:
-                d['attendee_count'] = 0
-            d['is_active'] = (d.get('event_code') == active_code)
-            all_events.append(d)
-    except Exception:
-        all_events = [active_ev]
+    now = time.time()
+    
+    if _event_cache['all_events'] and (now - _event_cache['ts'] < CACHE_TTL):
+        all_events = _event_cache['all_events']
+    else:
+        try:
+            all_events_cursor = events_master_col.find().sort([('created_at', -1)])
+            all_events = []
+            for ev in all_events_cursor:
+                d = dict(ev)
+                d['_id'] = str(d['_id'])
+                d['is_active'] = (d.get('event_code') == active_code)
+                all_events.append(d)
+            _event_cache['all_events'] = all_events
+        except Exception:
+            all_events = [active_ev]
 
     return {
         'settings': active_ev,
@@ -164,13 +192,18 @@ def inject_event_settings():
 
 EMAIL_REGEX = re.compile(r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$')
 
-def format_doc(doc, event_code=None):
-    """Clean MongoDB document for JSON responses, filling event metadata if absent."""
+def format_doc(doc, cfg_or_event_code=None):
+    """Clean MongoDB document for JSON responses without redundant DB queries."""
     if not doc:
         return None
     d = dict(doc)
     d['_id'] = str(d['_id'])
-    cfg = get_event_settings(event_code or d.get('event_code'))
+    
+    if isinstance(cfg_or_event_code, dict):
+        cfg = cfg_or_event_code
+    else:
+        cfg = get_event_settings(cfg_or_event_code or d.get('event_code'))
+        
     if not d.get('event_dates'):
         d['event_dates'] = cfg.get('event_dates', 'Event Dates TBA')
     if not d.get('event_venue'):
@@ -543,14 +576,34 @@ def admin_registrations():
             query['program'] = program_filter
 
     cursor = col.find(query).sort([('_id', -1)])
-    data = [format_doc(doc, event_code) for doc in cursor]
+    data = [format_doc(doc, ev_cfg) for doc in cursor]
 
-    # Isolated metrics specifically for this event's database collection!
-    total = col.count_documents({})
-    btech_count = col.count_documents({'program': 'B.Tech'})
-    mbatech_count = col.count_documents({'program': 'MBA Tech'})
-    other_count = col.count_documents({'program': {'$nin': ['B.Tech', 'MBA Tech']}})
-    checked_in = col.count_documents({'status': 'CHECKED_IN'})
+    # Fast single-pass metrics in 1 database roundtrip (Sub-millisecond)
+    try:
+        pipeline = [
+            {
+                '$facet': {
+                    'total': [{'$count': 'c'}],
+                    'btech': [{'$match': {'program': 'B.Tech'}}, {'$count': 'c'}],
+                    'mbatech': [{'$match': {'program': 'MBA Tech'}}, {'$count': 'c'}],
+                    'other': [{'$match': {'program': {'$nin': ['B.Tech', 'MBA Tech']}}}, {'$count': 'c'}],
+                    'checked_in': [{'$match': {'status': 'CHECKED_IN'}}, {'$count': 'c'}]
+                }
+            }
+        ]
+        facet_res = list(col.aggregate(pipeline))
+        facet = facet_res[0] if facet_res else {}
+        total = facet.get('total', [{}])[0].get('c', 0) if facet.get('total') else 0
+        btech_count = facet.get('btech', [{}])[0].get('c', 0) if facet.get('btech') else 0
+        mbatech_count = facet.get('mbatech', [{}])[0].get('c', 0) if facet.get('mbatech') else 0
+        other_count = facet.get('other', [{}])[0].get('c', 0) if facet.get('other') else 0
+        checked_in = facet.get('checked_in', [{}])[0].get('c', 0) if facet.get('checked_in') else 0
+    except Exception:
+        total = col.count_documents({})
+        btech_count = col.count_documents({'program': 'B.Tech'})
+        mbatech_count = col.count_documents({'program': 'MBA Tech'})
+        other_count = col.count_documents({'program': {'$nin': ['B.Tech', 'MBA Tech']}})
+        checked_in = col.count_documents({'status': 'CHECKED_IN'})
 
     return jsonify({
         'success': True,
@@ -675,6 +728,8 @@ def api_admin_create_event():
             upsert=True
         )
 
+    invalidate_cache()
+
     return jsonify({
         'success': True,
         'message': f"New event '{event_name} {event_edition}' created with isolated collection '{col_name}'!",
@@ -702,6 +757,8 @@ def api_admin_switch_event():
         {'$set': {'active_event_code': event_code}},
         upsert=True
     )
+
+    invalidate_cache()
 
     return jsonify({
         'success': True,
@@ -758,6 +815,8 @@ def api_admin_event_config():
         {'$set': update_fields},
         upsert=True
     )
+
+    invalidate_cache()
 
     return jsonify({
         'success': True,
