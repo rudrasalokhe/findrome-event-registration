@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ settings.event_name }} — Master Admin Console</title>
+  <meta name="description" content="Master Admin Console for {{ settings.event_name }} {{ settings.event_edition }}. Real-time attendee monitoring and Excel export.">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/findrome-icon.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+  {% if not is_authenticated %}
+  <!-- ── ADMIN PASSWORD LOCK SCREEN (Unified Obsidian Aesthetic) ── -->
+  <header class="top-header-bar" style="max-width: 440px;">
+    <div class="nav-brand-lockup">
+      <img src="{{ url_for('static', filename='img/findrome-logo.png') }}" alt="Findrome" class="nav-brand-logo">
+      <span class="nav-brand-sep">/</span>
+      <span class="nav-brand-tag">Admin Console</span>
+    </div>
+  </header>
+
+  <div class="auth-gate-wrapper">
+    <div class="auth-gate-card">
+      <div class="hero-eyebrow" style="margin-bottom: 12px;">
+        <span>ORGANIZING COMMITTEE</span>
+      </div>
+
+      <h1 class="auth-gate-title">Admin Console</h1>
+      <p class="auth-gate-desc">Enter the administrator password to access attendee database records and download Excel reports.</p>
+
+      <div id="admin-error-alert" class="auth-error-banner" style="display: none;">
+        Invalid admin password.
+      </div>
+
+
+      <form id="admin-login-form" style="width: 100%;">
+        <div class="auth-input-container">
+          <input 
+            type="password" 
+            id="admin-password-input" 
+            class="form-input" 
+            placeholder="Enter Admin Password (e.g. admin)" 
+            autocomplete="current-password" 
+            autofocus 
+            required
+            style="text-align: center; font-size: 1.15rem; font-weight: 600;"
+          >
+          <button type="submit" id="btn-admin-unlock" class="btn-emerald-primary">
+            Access Admin Console 📊
+          </button>
+        </div>
+      </form>
+
+      <div style="margin-top: 24px; font-size: 0.78rem; color: var(--text-dim);">
+        {{ settings.event_name }} {{ settings.event_edition }} • Executive Committee Database
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('admin-login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pwd = document.getElementById('admin-password-input').value.trim();
+      const btn = document.getElementById('btn-admin-unlock');
+      const err = document.getElementById('admin-error-alert');
+
+      btn.disabled = true;
+      btn.textContent = 'Authenticating...';
+      err.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/admin/login', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ password: pwd })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          window.location.reload();
+        } else {
+          err.textContent = data.message || 'Invalid password. Access denied.';
+          err.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = 'Access Admin Console 📊';
+        }
+      } catch {
+        err.textContent = 'Server connection error.';
+        err.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Access Admin Console 📊';
+      }
+    });
+  </script>
+
+  {% else %}
+  <!-- ── AUTHENTICATED ADMIN CONSOLE ── -->
+
+  <!-- Top Bar (Frosted Glass Nav) -->
+  <header class="top-header-bar wide">
+    <div class="nav-brand-lockup">
+      <img src="{{ url_for('static', filename='img/findrome-logo.png') }}" alt="Findrome" class="nav-brand-logo">
+      <span class="nav-brand-sep">/</span>
+      <span class="nav-brand-tag">Executive Admin</span>
+    </div>
+    
+    <div class="header-actions-group">
+      <!-- Event Schedule & Dates Configuration Button -->
+      <button type="button" class="nav-action-btn" id="btn-open-event-settings" title="Configure event dates and schedule in MongoDB Atlas">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" style="color: var(--emerald);">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        <span>Event Schedule</span>
+      </button>
+
+      <!-- Direct Download Excel Button with Glowing Emerald Highlight -->
+      <a href="/admin/export" class="btn-emerald-primary header-btn" title="Download complete registrations spreadsheet">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <span>Export Excel (.CSV)</span>
+      </a>
+
+      <a href="/volunteer" class="nav-action-btn" title="Open volunteer gate scanner desk">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+          <circle cx="12" cy="13" r="4"></circle>
+        </svg>
+        <span>Volunteer Desk</span>
+      </a>
+
+      <button type="button" class="nav-action-btn danger-hover" id="btn-admin-logout">
+        <span>Logout</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Commanding Main Obsidian Card -->
+  <main class="app-wide-card">
+    
+    <!-- Hero / Header Section -->
+    <header class="card-header-hero" style="margin-bottom: 24px; padding-bottom: 20px;">
+      <div class="hero-eyebrow">
+        <span class="hero-event-year" id="admin-hero-event-year">{{ (settings.event_name ~ ' ' ~ settings.event_edition) | upper }}</span>
+        <span class="hero-dot-sep"></span>
+        <span>MASTER ATTENDEE DATABASE</span>
+      </div>
+      <h1 class="hero-main-title">Attendee Roster</h1>
+      <p class="hero-subtitle">
+        Live candidate records for <strong style="color: #fff;" id="admin-event-name-display">{{ settings.event_name }}</strong> (<span id="admin-header-dates" style="color: var(--emerald); font-weight: 500;">{{ settings.event_dates }}</span>) synced to MongoDB Atlas.
+      </p>
+    </header>
+ 
+    <!-- Event Database Switcher & Isolation Hub -->
+    <div class="event-selector-bar">
+      <div class="event-selector-info">
+        <span class="event-indicator-dot"></span>
+        <span class="event-bar-label">Event Database:</span>
+        <div class="event-select-wrapper">
+          <select id="admin-event-select" class="event-dropdown-select" title="Switch between event registration databases">
+            {% for ev in all_events %}
+            <option value="{{ ev.event_code }}" {% if ev.event_code == active_event_code %}selected{% endif %}>
+              {{ ev.event_name }} {{ ev.event_edition }} {% if ev.event_code == active_event_code %}● (Live Active Form){% endif %}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <span id="active-live-badge" class="badge-active-live">LIVE FORM</span>
+      </div>
+
+      <div class="event-bar-actions">
+        <button type="button" class="btn-secondary-dark btn-sm" id="btn-make-event-active" style="display: none;" title="Set this event as the active public registration form">
+          Set as Live Event
+        </button>
+        <button type="button" class="btn-emerald-primary btn-sm" id="btn-open-new-event-modal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="13" height="13">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          <span>+ New Event</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Event Registration Metrics -->
+    <div class="metrics-strip">
+      <div class="metric-card accent-card">
+        <span class="metric-label">Total Registered</span>
+        <span class="metric-val emerald" id="admin-metric-total">0</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">B.Tech Enrollments</span>
+        <span class="metric-val" id="admin-metric-btech">0</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">MBA Tech Enrollments</span>
+        <span class="metric-val" id="admin-metric-mbatech">0</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Other NMIMS Programs</span>
+        <span class="metric-val" id="admin-metric-other">0</span>
+      </div>
+    </div>
+
+    <!-- Search, Filter & Quick Tools Strip -->
+    <section class="admin-toolbar-card">
+      <div class="admin-search-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="color: var(--accent-emerald); flex-shrink: 0;">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input 
+          type="text" 
+          id="admin-search-input" 
+          placeholder="Search by Name, SAP ID, Email, Program, or Branch..." 
+          autocomplete="off"
+        >
+        <button type="button" class="btn-secondary-dark" id="btn-clear-search" style="padding: 6px 14px; font-size: 0.8rem; display: none;">Clear</button>
+      </div>
+
+      <div class="filter-tabs-group">
+        <button type="button" class="filter-tab active" data-program="ALL">All (<span id="count-tab-all">0</span>)</button>
+        <button type="button" class="filter-tab" data-program="B.Tech">B.Tech (<span id="count-tab-btech">0</span>)</button>
+        <button type="button" class="filter-tab" data-program="MBA Tech">MBA Tech (<span id="count-tab-mbatech">0</span>)</button>
+        <button type="button" class="filter-tab" data-program="OTHER">Other (<span id="count-tab-other">0</span>)</button>
+      </div>
+    </section>
+
+    <!-- Attendee Data Table -->
+    <section class="admin-table-container">
+      <div class="mobile-table-hint">
+        ← Swipe horizontally to view full attendee details →
+      </div>
+      <div class="table-responsive-wrapper">
+
+        <table class="admin-data-table" id="candidates-table">
+          <thead>
+            <tr>
+              <th>Pass ID</th>
+              <th>Attendee Name</th>
+              <th>SAP ID</th>
+              <th>Program / Degree</th>
+              <th>Year & Branch</th>
+              <th>Contact Email</th>
+              <th>Phone</th>
+              <th>Registered At</th>
+            </tr>
+          </thead>
+          <tbody id="candidates-table-body">
+            <tr>
+              <td colspan="8" style="text-align: center; padding: 40px; color: var(--text-muted);">
+                Loading registrations from MongoDB Atlas...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Event Schedule & Configuration Modal -->
+  <div class="modal-overlay" id="event-settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-modal-title">
+    <div class="drawer-card" style="max-width: 520px;">
+      <div class="drawer-header">
+        <div>
+          <h3 id="settings-modal-title" class="drawer-title">Event Schedule & Configuration</h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted);">Set custom event dates, edition, and venue for this registration form.</p>
+        </div>
+        <button type="button" class="drawer-close-btn" id="btn-close-settings" aria-label="Close modal">✕</button>
+      </div>
+
+      <form id="event-settings-form" style="display: flex; flex-direction: column; gap: 14px;">
+        <input type="hidden" id="cfg-event-code" value="{{ active_event_code }}">
+        <div class="field-group">
+          <label class="field-label" for="cfg-event-name">Event Name</label>
+          <input type="text" id="cfg-event-name" class="form-input" value="{{ settings.event_name }}" placeholder="e.g. Findrome" required>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="cfg-event-edition">Edition / Year</label>
+          <input type="text" id="cfg-event-edition" class="form-input" value="{{ settings.event_edition }}" placeholder="e.g. 2026 or Spring 2026" required>
+        </div>
+
+        <div class="form-grid-two-col">
+          <div class="field-group">
+            <label class="field-label" for="cfg-start-date">Start Date</label>
+            <input type="date" id="cfg-start-date" class="form-input" value="{{ settings.event_start_date }}">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="cfg-end-date">End Date</label>
+            <input type="date" id="cfg-end-date" class="form-input" value="{{ settings.event_end_date }}">
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="cfg-event-dates">Custom Display Date Text</label>
+          <input type="text" id="cfg-event-dates" class="form-input" value="{{ settings.event_dates }}" placeholder="e.g. March 15 – 16, 2026">
+          <span style="font-size: 0.72rem; color: var(--text-dim); margin-top: 2px;">Leave blank to auto-format from the start and end dates above.</span>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="cfg-event-venue">Event Venue</label>
+          <input type="text" id="cfg-event-venue" class="form-input" value="{{ settings.event_venue }}" placeholder="e.g. NMIMS Mumbai Campus" required>
+        </div>
+
+        <div id="settings-save-alert" style="display: none; padding: 10px 12px; border-radius: 6px; font-size: 0.82rem;"></div>
+
+        <div style="display: flex; gap: 10px; margin-top: 6px;">
+          <button type="button" class="btn-secondary-dark" id="btn-cancel-settings" style="flex: 1;">Cancel</button>
+          <button type="submit" class="btn-emerald-primary" id="btn-save-settings" style="flex: 2;">Save Event Schedule</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Create New Event (Spins up an Isolated MongoDB Collection) -->
+  <div class="modal-overlay" id="new-event-modal" role="dialog" aria-modal="true" aria-labelledby="new-modal-title">
+    <div class="ticket-pass-card drawer-modal" style="max-width: 540px;">
+      <div class="drawer-header">
+        <div>
+          <h3 id="new-modal-title" class="drawer-title">Create New Event</h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted);">
+            Spins up a dedicated, isolated database collection in MongoDB Atlas. Registration count starts at 0 and previous attendees will not mix.
+          </p>
+        </div>
+        <button type="button" class="drawer-close-btn" id="btn-close-new-event" aria-label="Close modal">✕</button>
+      </div>
+
+      <form id="create-new-event-form" style="display: flex; flex-direction: column; gap: 14px;">
+        <div class="field-group">
+          <label class="field-label" for="new-event-name">Event Name</label>
+          <input type="text" id="new-event-name" class="form-input" placeholder="e.g. Findrome or Tech Conclave" required>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="new-event-edition">Edition / Year</label>
+          <input type="text" id="new-event-edition" class="form-input" placeholder="e.g. 2027 or Autumn 2026" required>
+        </div>
+
+        <div class="form-grid-two-col">
+          <div class="field-group">
+            <label class="field-label" for="new-start-date">Start Date</label>
+            <input type="date" id="new-start-date" class="form-input">
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="new-end-date">End Date</label>
+            <input type="date" id="new-end-date" class="form-input">
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="new-event-dates">Custom Display Date Text</label>
+          <input type="text" id="new-event-dates" class="form-input" placeholder="e.g. April 10 – 12, 2027">
+          <span style="font-size: 0.72rem; color: var(--text-dim); margin-top: 2px;">Leave blank to auto-format from the start and end dates.</span>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label" for="new-event-venue">Event Venue</label>
+          <input type="text" id="new-event-venue" class="form-input" placeholder="e.g. NMIMS Mukesh Patel Auditorium" required>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 10px; margin-top: 4px; padding: 10px 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-default); border-radius: var(--radius-input);">
+          <input type="checkbox" id="new-make-active" checked style="accent-color: var(--emerald); width: 16px; height: 16px; cursor: pointer;">
+          <label for="new-make-active" style="font-size: 0.82rem; color: #fff; cursor: pointer;">
+            Make this the live active event for public registrations immediately
+          </label>
+        </div>
+
+        <div id="new-event-alert" style="display: none; padding: 10px 12px; border-radius: 6px; font-size: 0.82rem;"></div>
+
+        <div style="display: flex; gap: 10px; margin-top: 6px;">
+          <button type="button" class="btn-secondary-dark" id="btn-cancel-new-event" style="flex: 1;">Cancel</button>
+          <button type="submit" class="btn-emerald-primary" id="btn-submit-new-event" style="flex: 2;">Create & Launch Event</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    window.INITIAL_ACTIVE_EVENT = "{{ active_event_code }}";
+  </script>
+  <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+  <script>
+    document.getElementById('btn-admin-logout').addEventListener('click', async () => {
+      await fetch('/api/admin/logout', { method: 'POST' });
+      window.location.reload();
+    });
+  </script>
+  {% endif %}
+
+</body>
+</html>

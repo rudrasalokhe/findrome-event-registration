@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Findrome NMIMS — Volunteer QR Verification Desk</title>
+  <meta name="description" content="Official Volunteer Pass Verification and Check-in Portal for Findrome 2026.">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <!-- html5-qrcode library for real-time camera scanning -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+
+  <!-- Top Bar -->
+  <header class="top-header-bar">
+    <div class="brand-pill-nmims">
+      <span class="nmims-logo-dot"></span>
+      <span>NMIMS MUMBAI • VOLUNTEER DESK</span>
+    </div>
+    <div class="header-actions-group">
+      <a href="/" class="nav-action-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        <span>Registration Form</span>
+      </a>
+      <button type="button" class="nav-action-btn" id="btn-toggle-sound" title="Toggle audio feedback">
+        <span id="sound-status-icon">🔊</span>
+        <span id="sound-status-text">Audio: ON</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Scanner Main Container -->
+  <main class="scanner-container">
+    
+    <!-- Header Strip -->
+    <div class="scanner-header-strip">
+      <div class="scanner-title-badge">
+        <div class="section-number-badge" style="width: 44px; height: 44px; font-size: 1.1rem;">⚡</div>
+        <div class="scanner-title-text">
+          <h1>Volunteer Scanner & Entry Desk</h1>
+          <p>Scan participant QR codes or enter SAP ID to verify and admit attendees into Findrome 2026.</p>
+        </div>
+      </div>
+      <div class="badge-pill-emerald">
+        <span class="pulse-dot"></span>
+        <span id="system-status-indicator">SYSTEM ACTIVE & SYNCED</span>
+      </div>
+    </div>
+
+    <!-- Live Event Attendance Metrics -->
+    <div class="metrics-strip">
+      <div class="metric-card">
+        <span class="metric-label">Total Registered</span>
+        <span class="metric-val" id="metric-total">0</span>
+      </div>
+      <div class="metric-card accent-card">
+        <span class="metric-label">Admitted / Checked In</span>
+        <span class="metric-val emerald" id="metric-admitted">0</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Attendance Rate</span>
+        <span class="metric-val" id="metric-rate">0%</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Remaining Pending</span>
+        <span class="metric-val" id="metric-pending">0</span>
+      </div>
+    </div>
+
+    <!-- Scanner Grid -->
+    <div class="scanner-grid">
+      
+      <!-- Viewfinder Panel -->
+      <section class="scanner-viewfinder-card">
+        <div class="section-header-text">
+          <h2 class="section-title">Camera Scanner</h2>
+          <p class="section-desc">Position the attendee's delegate QR pass inside the frame.</p>
+        </div>
+
+        <!-- Camera Viewport Box with Cyber HUD -->
+        <div class="viewfinder-wrapper" id="viewfinder-container">
+          <!-- HTML5 QR Code injects video here -->
+          <div id="camera-viewport"></div>
+
+          <!-- Futuristic HUD Frame -->
+          <div class="hud-frame" aria-hidden="true">
+            <div class="hud-corner tl"></div>
+            <div class="hud-corner tr"></div>
+            <div class="hud-corner bl"></div>
+            <div class="hud-corner br"></div>
+          </div>
+
+          <!-- Animated Green Laser Beam -->
+          <div class="laser-scan-line" id="laser-beam" aria-hidden="true"></div>
+        </div>
+
+        <!-- Camera Controls Strip -->
+        <div class="scanner-controls-row">
+          <div class="camera-status-indicator">
+            <span class="pulse-dot" style="width: 7px; height: 7px;"></span>
+            <span id="camera-label-text">Initializing camera feed...</span>
+          </div>
+          <button type="button" class="btn-secondary-dark" id="btn-toggle-camera" style="padding: 8px 18px; font-size: 0.82rem;">
+            Switch Camera
+          </button>
+        </div>
+
+        <!-- Manual Pass ID / SAP ID Fast Fallback -->
+        <div style="margin-top: 10px;">
+          <label for="manual-code-input" class="field-label" style="font-size: 0.8rem; margin-bottom: 6px; display: block;">
+            Manual Entry (Pass Code or SAP ID):
+          </label>
+          <form id="manual-verify-form" class="manual-input-box">
+            <input 
+              type="text" 
+              id="manual-code-input" 
+              placeholder="e.g. FD-NMIMS-7824 or 70012345678" 
+              autocomplete="off"
+            >
+            <button type="submit" class="btn-emerald-primary">Verify</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- Recent Check-ins Activity Feed -->
+      <aside class="scanner-side-panel">
+        <div class="recent-feed-card">
+          <div class="recent-feed-header">
+            <h3 class="feed-title">Live Gate Feed</h3>
+            <span style="font-size: 0.75rem; color: var(--text-dim);" id="feed-update-indicator">Auto-syncing</span>
+          </div>
+          <div class="feed-items-container" id="feed-items-container">
+            <p style="color: var(--text-dim); font-size: 0.85rem; text-align: center; padding: 24px;">
+              No check-ins recorded yet during this session.
+            </p>
+          </div>
+        </div>
+      </aside>
+
+    </div>
+  </main>
+
+  <!-- Verification Result Pop-up Modal -->
+  <div class="modal-overlay" id="result-modal" role="dialog" aria-modal="true">
+    <div class="scan-result-card" id="result-card-inner">
+      
+      <div class="result-icon-circle" id="result-icon-box">
+        <!-- SVG injected dynamically -->
+      </div>
+
+      <h3 class="result-title" id="result-title-text">Verification Status</h3>
+      <p class="result-desc" id="result-desc-text">Status message goes here.</p>
+
+      <!-- Attendee Details Badge -->
+      <div class="result-attendee-badge" id="result-attendee-details">
+        <div class="result-row">
+          <span class="result-row-label">Name</span>
+          <span class="result-row-val" id="res-val-name">—</span>
+        </div>
+        <div class="result-row">
+          <span class="result-row-label">Pass Code</span>
+          <span class="result-row-val" id="res-val-pass" style="color: var(--accent-emerald);">—</span>
+        </div>
+        <div class="result-row">
+          <span class="result-row-label">SAP ID</span>
+          <span class="result-row-val" id="res-val-sap">—</span>
+        </div>
+        <div class="result-row">
+          <span class="result-row-label">Program & Branch</span>
+          <span class="result-row-val" id="res-val-program">—</span>
+        </div>
+        <div class="result-row">
+          <span class="result-row-label">Admitted At</span>
+          <span class="result-row-val" id="res-val-time">—</span>
+        </div>
+      </div>
+
+      <button type="button" class="btn-emerald-primary" id="btn-next-scan" style="width: 100%; margin-top: 8px;">
+        Scan Next Attendee
+      </button>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/scanner.js') }}"></script>
+</body>
+</html>

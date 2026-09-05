@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ settings.event_name }} — Event Registration Form</title>
+  <meta name="description" content="Official Event Registration Form for {{ settings.event_name }} {{ settings.event_edition }} at NMIMS. Register to attend keynote sessions, conclaves, and exhibits.">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/findrome-icon.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <!-- Lightweight client-side QR Code generator -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+
+  <!-- Top Navigation Bar (Integrated Frosted Glass Nav) -->
+  <header class="top-header-bar">
+    <div class="nav-brand-lockup">
+      <img src="{{ url_for('static', filename='img/findrome-logo.png') }}" alt="Findrome" class="nav-brand-logo">
+      <span class="nav-brand-sep">/</span>
+      <span class="nav-brand-tag">NMIMS MPSTME</span>
+    </div>
+
+    <!-- Candidate Navigation Actions -->
+    <div class="header-actions-group">
+      <button type="button" class="nav-action-btn" id="open-lookup-btn" title="Already registered? Retrieve your digital entry pass">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <span>Find My Pass</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Floating Obsidian Card -->
+  <main class="event-main-card">
+    
+    <!-- Hero / Header Section -->
+    <header class="card-header-hero">
+      <div class="hero-eyebrow">
+        <span class="hero-event-year" id="hero-event-name-display">{{ (settings.event_name ~ ' ' ~ settings.event_edition) | upper }}</span>
+        <span class="hero-dot-sep"></span>
+        <span>ANNUAL CONCLAVE</span>
+      </div>
+      <h1 class="hero-main-title">Delegate Registration</h1>
+      <p class="hero-subtitle">
+        Reserve your verified pass for keynote addresses, tech exhibits, and speaker conclaves. Your official delegate pass is issued instantly upon submission.
+      </p>
+
+      <div class="event-meta-strip">
+        <div class="meta-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+          <span id="hero-event-dates-display">{{ settings.event_dates }}</span>
+        </div>
+        <span class="meta-divider">|</span>
+        <div class="meta-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
+            <circle cx="12" cy="10" r="3"></circle>
+          </svg>
+          <span id="hero-event-venue-display">{{ settings.event_venue }}</span>
+        </div>
+        <span class="meta-divider">|</span>
+        <div class="meta-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            <polyline points="9 12 11 14 15 10"></polyline>
+          </svg>
+          <span>All-Access Delegate Pass</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Registration Form -->
+    <form id="registration-form" class="registration-form" novalidate>
+
+      <!-- Server Alert Container -->
+      <div id="server-alert" class="server-alert" role="alert">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+        <span id="server-alert-message"></span>
+      </div>
+
+      <!-- Section 1: Personal Details -->
+      <section class="form-section-container" aria-labelledby="section-01-heading">
+        <div class="section-header">
+          <div class="section-title-wrap">
+            <span class="section-tag-mark"></span>
+            <h2 id="section-01-heading" class="section-title">Personal Details</h2>
+          </div>
+          <span class="section-tag-sub">Official Attendee Identification</span>
+        </div>
+
+        <div class="form-grid-two-col">
+          <!-- Full Name -->
+          <div class="field-group" id="group-name">
+            <div class="field-label-wrapper">
+              <label for="name" class="field-label">Name <span class="required-star">*</span></label>
+            </div>
+            <div class="input-wrapper">
+              <input 
+                type="text" 
+                id="name" 
+                name="name" 
+                class="form-input" 
+                placeholder="e.g. Rudra Salokhe" 
+                autocomplete="name"
+                required
+              >
+            </div>
+            <div class="field-error-msg" id="name-error">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <span>This field is required.</span>
+            </div>
+          </div>
+
+          <!-- Email Address -->
+          <div class="field-group" id="group-email">
+            <div class="field-label-wrapper">
+              <label for="email" class="field-label">Email <span class="required-star">*</span></label>
+            </div>
+            <div class="input-wrapper">
+              <input 
+                type="email" 
+                id="email" 
+                name="email" 
+                class="form-input" 
+                placeholder="e.g. rudra@nmims.edu" 
+                autocomplete="email"
+                required
+              >
+            </div>
+            <div class="field-error-msg" id="email-error">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <span>This field is required.</span>
+            </div>
+          </div>
+
+          <!-- Phone Number -->
+          <div class="field-group" id="group-phone">
+            <div class="field-label-wrapper">
+              <label for="phone" class="field-label">Phone Number <span class="required-star">*</span></label>
+              <span class="field-counter" id="phone-counter">0/10 digits</span>
+            </div>
+            <div class="input-wrapper">
+              <input 
+                type="tel" 
+                id="phone" 
+                name="phone" 
+                class="form-input" 
+                placeholder="e.g. 9876543210" 
+                maxlength="10" 
+                inputmode="numeric"
+                autocomplete="tel"
+                required
+              >
+            </div>
+            <div class="field-error-msg" id="phone-error">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <span>This field is required.</span>
+            </div>
+          </div>
+
+          <!-- SAP ID -->
+          <div class="field-group" id="group-sap_id">
+            <div class="field-label-wrapper">
+              <label for="sap_id" class="field-label">SAP ID <span class="required-star">*</span></label>
+              <span class="field-counter" id="sap-counter">0/11 digits</span>
+            </div>
+            <div class="input-wrapper">
+              <input 
+                type="text" 
+                id="sap_id" 
+                name="sap_id" 
+                class="form-input" 
+                placeholder="e.g. 70012345678" 
+                maxlength="11" 
+                inputmode="numeric"
+                required
+              >
+            </div>
+            <div class="field-error-msg" id="sap-error">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <span>This field is required.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 2: Academic Credentials -->
+      <section class="form-section-container" aria-labelledby="section-02-heading">
+        <div class="section-header">
+          <div class="section-title-wrap">
+            <span class="section-tag-mark"></span>
+            <h2 id="section-02-heading" class="section-title">Academic Credentials</h2>
+          </div>
+          <span class="section-tag-sub">NMIMS Enrollment Details</span>
+        </div>
+
+        <div class="form-grid-two-col">
+          <!-- Program / Degree -->
+          <div class="field-group" id="group-program">
+            <div class="field-label-wrapper">
+              <label for="program" class="field-label">Program / Degree <span class="required-star">*</span></label>
+            </div>
+            <div class="input-wrapper">
+              <select id="program" name="program" class="form-input form-select" required>
+                <option value="" disabled selected>Select program / degree...</option>
+                <option value="B.Tech">B.Tech (Bachelor of Technology)</option>
+                <option value="MBA Tech">MBA Tech (Dual Degree)</option>
+                <option value="BBA">BBA (Bachelor of Business Administration)</option>
+                <option value="B.Com">B.Com (Fintech / Finance)</option>
+                <option value="MCA">MCA (Master of Computer Applications)</option>
+                <option value="M.Tech">M.Tech</option>
+                <option value="MBA">MBA</option>
+                <option value="Other">Other NMIMS Program</option>
+              </select>
+              <div class="select-chevron-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </div>
+            </div>
+            <div class="field-error-msg" id="program-error">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <span>This field is required.</span>
+            </div>
+          </div>
+
+          <!-- Year of Study -->
+          <div class="field-group" id="group-year_of_study">
+            <div class="field-label-wrapper">
+              <label for="year_of_study" class="field-label">Year of Study <span class="required-star">*</span></label>
+            </div>
+            <div class="input-wrapper">
+              <select id="year_of_study" name="year_of_study" class="form-input form-select" required>
+                <option value="" disabled selected>Select year of study...</option>
+                <option value="1st Year">1st Year (Freshman)</option>
+                <option value="2nd Year">2nd Year (Sophomore)</option>
+                <option value="3rd Year">3rd Year (Junior)</option>
+                <option value="4th Year">4th Year (Senior)</option>
+                <option value="5th Year">5th Year (Integrated Degree)</option>
+              </select>
+              <div class="select-chevron-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </div>
+            </div>
+            <div class="field-error-msg" id="year-error">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <span>This field is required.</span>
+            </div>
+          </div>
+
+          <!-- Branch -->
+          <div class="field-group form-grid-full-col" id="group-branch">
+            <div class="field-label-wrapper">
+              <label for="branch" class="field-label">Branch <span class="required-star">*</span></label>
+            </div>
+            <div class="input-wrapper">
+              <input 
+                type="text" 
+                id="branch" 
+                name="branch" 
+                class="form-input" 
+                placeholder="e.g. Computer Engineering" 
+                required
+              >
+            </div>
+            <div class="field-error-msg" id="branch-error">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <span>This field is required.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Confirmation Notice & Primary Submit Action -->
+      <div class="submission-container">
+        <div class="confirmation-note">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          </svg>
+          <p>By submitting this form, you confirm that the information provided is accurate and complete.</p>
+        </div>
+
+        <button type="submit" id="submit-btn" class="btn-emerald-primary">
+          <span class="btn-spinner" aria-hidden="true"></span>
+          <span class="btn-text">Submit Registration</span>
+        </button>
+      </div>
+
+    </form>
+  </main>
+
+  <!-- Footer (Cleaned of all internal links) -->
+  <footer class="app-footer">
+    <img src="{{ url_for('static', filename='img/findrome-logo.png') }}" alt="Findrome" class="footer-logo-img">
+    <p class="footer-copyright">
+      © <span id="footer-edition-year">{{ settings.event_edition }}</span> {{ settings.event_name }} • Narsee Monjee Institute of Management Studies (NMIMS). All rights reserved.
+    </p>
+  </footer>
+
+  <!-- Confirmation / Delegate Pass Modal (Holographic QR Entry Pass) -->
+  <div class="modal-overlay" id="success-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="ticket-pass-card holographic">
+      <div class="ticket-header">
+        <img src="{{ url_for('static', filename='img/findrome-logo.png') }}" alt="Findrome" class="ticket-brand-logo">
+        <h3 id="modal-title" class="ticket-title">Delegate Pass Issued!</h3>
+        <p class="ticket-subtitle">Present this official delegate pass at the venue entrance for admission.</p>
+      </div>
+
+      <!-- Delegate Ticket Body Graphic -->
+      <div class="ticket-body-container" id="printable-ticket-content">
+        <div class="ticket-badge-pill">
+          <div>
+            <span class="ticket-code-label">Pass Identification</span>
+            <div class="ticket-code-val" id="ticket-id-display">FD-NMIMS-XXXX</div>
+          </div>
+          <span class="pass-status-pill confirmed" id="ticket-status-pill">CONFIRMED DELEGATE</span>
+        </div>
+
+        <div class="ticket-detail-grid">
+          <div class="ticket-detail-item">
+            <span class="ticket-detail-label">Candidate Name</span>
+            <span class="ticket-detail-value" id="ticket-name-display">—</span>
+          </div>
+          <div class="ticket-detail-item">
+            <span class="ticket-detail-label">SAP ID</span>
+            <span class="ticket-detail-value" id="ticket-sap-display">—</span>
+          </div>
+          <div class="ticket-detail-item">
+            <span class="ticket-detail-label">Program & Year</span>
+            <span class="ticket-detail-value" id="ticket-program-display">—</span>
+          </div>
+          <div class="ticket-detail-item">
+            <span class="ticket-detail-label">Branch</span>
+            <span class="ticket-detail-value" id="ticket-branch-display">—</span>
+          </div>
+        </div>
+
+        <!-- Venue & Access Authorized Strip (Open Event Pass) -->
+        <div class="ticket-access-area">
+          <div class="ticket-access-meta">
+            <span class="ticket-detail-label">Venue & Access</span>
+            <div style="font-size: 0.88rem; font-weight: 700; color: #fff;" id="ticket-venue-display">{{ settings.event_venue }}</div>
+            <div style="font-size: 0.78rem; color: var(--text-dim);" id="ticket-time-display">{{ settings.event_dates }}</div>
+          </div>
+          <div class="ticket-status-seal">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              <polyline points="9 12 11 14 15 10"></polyline>
+            </svg>
+            <div class="seal-text">
+              <span class="seal-title">ENTRY GRANTED</span>
+              <span class="seal-sub">ALL-ACCESS DELEGATE</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ticket-actions-row">
+        <button type="button" class="btn-secondary-dark" id="btn-print-pass">
+          Print / Save Pass
+        </button>
+        <button type="button" class="btn-emerald-primary" id="btn-register-another" style="flex: 1;">
+          Register Another
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- "Find My Pass" Retrieval Modal -->
+  <div class="modal-overlay" id="lookup-modal" role="dialog" aria-modal="true" aria-labelledby="lookup-title">
+    <div class="drawer-card" style="max-width: 520px;">
+      <div class="drawer-header">
+        <div>
+          <h3 id="lookup-title" class="drawer-title">Find My Pass</h3>
+          <p style="font-size: 0.82rem; color: var(--text-muted);">Enter your 11-digit SAP ID or Registered Email</p>
+        </div>
+        <button type="button" class="drawer-close-btn" id="btn-close-lookup" aria-label="Close modal">✕</button>
+      </div>
+      <div>
+        <form id="lookup-form" class="lookup-input-wrapper">
+          <input 
+            type="text" 
+            id="lookup-query-input" 
+            class="form-input" 
+            placeholder="e.g. 70012345678 or name@nmims.edu" 
+            required
+          >
+          <button type="submit" class="btn-emerald-primary" id="btn-submit-lookup">Search</button>
+        </form>
+        <div id="lookup-error-msg" style="display: none; color: var(--error-color); font-size: 0.85rem; margin-top: 10px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

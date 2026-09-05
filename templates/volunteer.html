@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ settings.event_name }} — Volunteer Scanner Desk</title>
+  <meta name="description" content="Authorized Volunteer Verification Portal for {{ settings.event_name }} {{ settings.event_edition }}.">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/findrome-icon.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+
+  {% if not is_authenticated %}
+  <!-- ── PIN LOCK SCREEN (Unified Obsidian Aesthetic) ── -->
+  <header class="top-header-bar" style="max-width: 440px;">
+    <div class="nav-brand-lockup">
+      <img src="{{ url_for('static', filename='img/findrome-logo.png') }}" alt="Findrome" class="nav-brand-logo">
+      <span class="nav-brand-sep">/</span>
+      <span class="nav-brand-tag">Gate Desk</span>
+    </div>
+  </header>
+
+  <div class="auth-gate-wrapper">
+    <div class="auth-gate-card">
+      <div class="hero-eyebrow" style="margin-bottom: 12px;">
+        <span>SECURITY CHECKPOINT</span>
+      </div>
+
+      <h1 class="auth-gate-title">Volunteer Verification</h1>
+      <p class="auth-gate-desc">Enter the 4-digit security PIN to unlock the live camera QR scanner.</p>
+
+      <div id="pin-error-alert" class="auth-error-banner" style="display: none;">
+        Invalid PIN. Please check with the organizing committee.
+      </div>
+
+      <form id="volunteer-pin-form" style="width: 100%;">
+        <div class="auth-input-container">
+          <input 
+            type="password" 
+            id="volunteer-pin-input" 
+            class="form-input" 
+            maxlength="8" 
+            placeholder="Enter PIN (e.g. 2026)" 
+            autocomplete="off" 
+            autofocus 
+            required
+            style="text-align: center; font-size: 1.4rem; letter-spacing: 6px; font-weight: 700;"
+          >
+          <button type="submit" id="btn-unlock-scanner" class="btn-emerald-primary">
+            Unlock Scanner Desk
+          </button>
+        </div>
+      </form>
+
+      <div style="margin-top: 24px; font-size: 0.78rem; color: var(--text-dim);">
+        {{ settings.event_name }} {{ settings.event_edition }} • Official Organizing Committee Gate Desk
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('volunteer-pin-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const pin = document.getElementById('volunteer-pin-input').value.trim();
+      const btn = document.getElementById('btn-unlock-scanner');
+      const err = document.getElementById('pin-error-alert');
+
+      btn.disabled = true;
+      btn.textContent = 'Verifying...';
+      err.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/volunteer/login', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ pin: pin })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          window.location.reload();
+        } else {
+          err.textContent = data.message || 'Invalid PIN. Access denied.';
+          err.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = 'Unlock Scanner Desk';
+        }
+      } catch {
+        err.textContent = 'Server connection error.';
+        err.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Unlock Scanner Desk';
+      }
+    });
+  </script>
+
+  {% else %}
+  <!-- ── AUTHENTICATED SCANNER DESK ── -->
+
+  <!-- Top Bar (Frosted Glass Nav) -->
+  <header class="top-header-bar wide">
+    <div class="nav-brand-lockup">
+      <img src="{{ url_for('static', filename='img/findrome-logo.png') }}" alt="Findrome" class="nav-brand-logo">
+      <span class="nav-brand-sep">/</span>
+      <span class="nav-brand-tag">Volunteer Gate Desk</span>
+    </div>
+    <div class="header-actions-group">
+      <button type="button" class="nav-action-btn" id="btn-toggle-sound" title="Toggle audio feedback">
+        <span id="sound-status-icon">🔊</span>
+        <span id="sound-status-text">Audio: ON</span>
+      </button>
+      <button type="button" class="nav-action-btn danger-hover" id="btn-volunteer-logout">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+          <polyline points="16 17 21 12 16 7"></polyline>
+          <line x1="21" y1="12" x2="9" y2="12"></line>
+        </svg>
+        <span>Lock</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Commanding Main Obsidian Card -->
+  <main class="app-wide-card">
+    
+    <!-- Hero / Header Section -->
+    <header class="card-header-hero" style="margin-bottom: 24px; padding-bottom: 20px;">
+      <div class="hero-eyebrow">
+        <span class="hero-event-year">{{ (settings.event_name ~ ' ' ~ settings.event_edition) | upper }}</span>
+        <span class="hero-dot-sep"></span>
+        <span>GATE VERIFICATION DESK</span>
+      </div>
+      <h1 class="hero-main-title">Admission Scanner</h1>
+      <p class="hero-subtitle">
+        Scan attendee QR passes with the live camera feed or enter a pass code manually to record admissions to MongoDB Atlas.
+      </p>
+    </header>
+
+
+    <!-- Live Event Attendance Metrics -->
+    <div class="metrics-strip">
+      <div class="metric-card">
+        <span class="metric-label">Total Registered</span>
+        <span class="metric-val" id="metric-total">0</span>
+      </div>
+      <div class="metric-card accent-card">
+        <span class="metric-label">Admitted / Checked In</span>
+        <span class="metric-val emerald" id="metric-admitted">0</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Attendance Rate</span>
+        <span class="metric-val" id="metric-rate">0%</span>
+      </div>
+      <div class="metric-card">
+        <span class="metric-label">Pending Admission</span>
+        <span class="metric-val" id="metric-pending">0</span>
+      </div>
+    </div>
+
+    <!-- Scanner Layout Grid -->
+    <div class="scanner-grid">
+      
+      <!-- Viewfinder Panel -->
+      <section class="scanner-viewfinder-card">
+        <div class="section-header-text">
+          <h2 class="section-title">Camera Scanner</h2>
+          <p class="section-desc">Align attendee's delegate QR pass inside the cybernetic HUD.</p>
+        </div>
+
+        <!-- Camera Viewport Box with Cyber HUD -->
+        <div class="viewfinder-wrapper" id="viewfinder-container">
+          <div id="camera-viewport"></div>
+
+          <!-- Futuristic HUD Frame -->
+          <div class="hud-frame" aria-hidden="true">
+            <div class="hud-corner tl"></div>
+            <div class="hud-corner tr"></div>
+            <div class="hud-corner bl"></div>
+            <div class="hud-corner br"></div>
+          </div>
+
+          <!-- Animated Green Laser Beam -->
+          <div class="laser-scan-line" id="laser-beam" aria-hidden="true"></div>
+        </div>
+
+        <!-- Camera Controls Strip -->
+        <div class="scanner-controls-row">
+          <div class="camera-status-indicator">
+            <span class="pulse-dot" style="width: 7px; height: 7px;"></span>
+            <span id="camera-label-text">Initializing camera feed...</span>
+          </div>
+          <button type="button" class="btn-secondary-dark" id="btn-toggle-camera" style="padding: 8px 18px; font-size: 0.82rem;">
+            Switch Camera
+          </button>
+        </div>
+
+        <!-- Manual Pass ID / SAP ID Fast Fallback -->
+        <div style="margin-top: 10px;">
+          <label for="manual-code-input" class="field-label" style="font-size: 0.8rem; margin-bottom: 6px; display: block;">
+            Manual Entry (Pass Code or SAP ID):
+          </label>
+          <form id="manual-verify-form" class="manual-input-box">
+            <input 
+              type="text" 
+              id="manual-code-input" 
+              placeholder="e.g. FD-NMIMS-7824 or 70012345678" 
+              autocomplete="off"
+            >
+            <button type="submit" class="btn-emerald-primary">Verify</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- Recent Check-ins Activity Feed -->
+      <aside class="scanner-side-panel">
+        <div class="recent-feed-card">
+          <div class="recent-feed-header">
+            <h3 class="feed-title">Live Gate Stream</h3>
+            <span style="font-size: 0.75rem; color: var(--accent-emerald);" id="feed-update-indicator">● Atlas Live</span>
+          </div>
+          <div class="feed-items-container" id="feed-items-container">
+            <p style="color: var(--text-dim); font-size: 0.85rem; text-align: center; padding: 24px;">
+              No check-ins recorded yet during this session.
+            </p>
+          </div>
+        </div>
+      </aside>
+
+    </div>
+  </main>
+
+  <!-- Verification Result Pop-up Modal -->
+  <div class="modal-overlay" id="result-modal" role="dialog" aria-modal="true">
+    <div class="scan-result-card" id="result-card-inner">
+      
+      <div class="result-icon-circle" id="result-icon-box">
+        <!-- SVG injected dynamically -->
+      </div>
+
+      <h3 class="result-title" id="result-title-text">Verification Status</h3>
+      <p class="result-desc" id="result-desc-text">Status message goes here.</p>
+
+      <!-- Attendee Details Badge -->
+      <div class="result-attendee-badge" id="result-attendee-details">
+        <div class="result-row">
+          <span class="result-row-label">Name</span>
+          <span class="result-row-val" id="res-val-name">—</span>
+        </div>
+        <div class="result-row">
+          <span class="result-row-label">Pass Code</span>
+          <span class="result-row-val" id="res-val-pass" style="color: var(--accent-emerald);">—</span>
+        </div>
+        <div class="result-row">
+          <span class="result-row-label">SAP ID</span>
+          <span class="result-row-val" id="res-val-sap">—</span>
+        </div>
+        <div class="result-row">
+          <span class="result-row-label">Program & Branch</span>
+          <span class="result-row-val" id="res-val-program">—</span>
+        </div>
+        <div class="result-row">
+          <span class="result-row-label">Admitted At</span>
+          <span class="result-row-val" id="res-val-time">—</span>
+        </div>
+      </div>
+
+      <button type="button" class="btn-emerald-primary" id="btn-next-scan" style="width: 100%; margin-top: 8px;">
+        Scan Next Attendee
+      </button>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='js/scanner.js') }}"></script>
+  <script>
+    document.getElementById('btn-volunteer-logout').addEventListener('click', async () => {
+      await fetch('/api/volunteer/logout', { method: 'POST' });
+      window.location.reload();
+    });
+  </script>
+  {% endif %}
+
+</body>
+</html>
