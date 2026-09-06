@@ -190,6 +190,13 @@ def inject_event_settings():
                 d = dict(ev)
                 d['_id'] = str(d['_id'])
                 d['is_active'] = (d.get('event_code') == active_code)
+                try:
+                    c = get_registrations_col(d.get('event_code'))
+                    d['attendee_count'] = c.count_documents({})
+                    d['checked_in_count'] = c.count_documents({'status': 'CHECKED_IN'})
+                except Exception:
+                    d['attendee_count'] = 0
+                    d['checked_in_count'] = 0
                 all_events.append(d)
             _event_cache['all_events'] = all_events
         except Exception:
@@ -641,8 +648,12 @@ def admin_registrations():
             {'program': regex_pattern}
         ]
 
-    if program_filter and program_filter not in ('ALL', 'CHECKED_IN', 'CONFIRMED'):
-        if program_filter == 'OTHER':
+    if program_filter and program_filter != 'ALL':
+        if program_filter == 'CHECKED_IN':
+            query['status'] = 'CHECKED_IN'
+        elif program_filter == 'CONFIRMED':
+            query['status'] = {'$ne': 'CHECKED_IN'}
+        elif program_filter == 'OTHER':
             query['program'] = {'$nin': ['B.Tech', 'MBA Tech']}
         else:
             query['program'] = program_filter
@@ -677,6 +688,9 @@ def admin_registrations():
         other_count = col.count_documents({'program': {'$nin': ['B.Tech', 'MBA Tech']}})
         checked_in = col.count_documents({'status': 'CHECKED_IN'})
 
+    pct = round((checked_in / total * 100), 1) if total > 0 else 0
+    pending_count = max(0, total - checked_in)
+
     return jsonify({
         'success': True,
         'event_code': event_code,
@@ -686,10 +700,12 @@ def admin_registrations():
         'event_venue': ev_cfg.get('event_venue', ''),
         'is_active': (event_code == get_active_event_code()),
         'total': total,
+        'checked_in': checked_in,
+        'pending': pending_count,
+        'attendance_percentage': pct,
         'btech_count': btech_count,
         'mbatech_count': mbatech_count,
         'other_count': other_count,
-        'checked_in': checked_in,
         'filtered_count': len(data),
         'registrations': data
     })
@@ -707,9 +723,12 @@ def api_admin_list_events():
         d['_id'] = str(d['_id'])
         code = d.get('event_code')
         try:
-            d['attendee_count'] = get_registrations_col(code).count_documents({})
+            c = get_registrations_col(code)
+            d['attendee_count'] = c.count_documents({})
+            d['checked_in_count'] = c.count_documents({'status': 'CHECKED_IN'})
         except Exception:
             d['attendee_count'] = 0
+            d['checked_in_count'] = 0
         d['is_active'] = (code == active_code)
         events_list.append(d)
 

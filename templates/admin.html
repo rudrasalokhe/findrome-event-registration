@@ -165,7 +165,7 @@
           <select id="admin-event-select" class="event-dropdown-select" title="Switch between event registration databases">
             {% for ev in all_events %}
             <option value="{{ ev.event_code }}" {% if ev.event_code == active_event_code %}selected{% endif %}>
-              {{ ev.event_name }} {{ ev.event_edition }} {% if ev.event_code == active_event_code %}● (Live Active Form){% endif %}
+              {{ ev.event_name }} {{ ev.event_edition }} [{{ ev.checked_in_count|default(0) }}/{{ ev.attendee_count|default(0) }} Attended]{% if ev.event_code == active_event_code %} ● (Live Active Form){% endif %}
             </option>
             {% endfor %}
           </select>
@@ -187,23 +187,32 @@
       </div>
     </div>
 
-    <!-- Event Registration Metrics -->
+    <!-- Event Registration & Scanning Attendance Metrics -->
     <div class="metrics-strip">
-      <div class="metric-card accent-card">
+      <div class="metric-card">
         <span class="metric-label">Total Registered</span>
-        <span class="metric-val emerald" id="admin-metric-total">0</span>
+        <span class="metric-val" id="admin-metric-total">0</span>
+      </div>
+      <div class="metric-card accent-card" style="border-color: rgba(0, 223, 130, 0.4); background: linear-gradient(180deg, rgba(0, 223, 130, 0.1) 0%, rgba(255, 255, 255, 0.02) 100%);">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span class="metric-label" style="color: var(--emerald);">Attended by Scanning</span>
+          <span class="pulse-dot" style="width: 7px; height: 7px;"></span>
+        </div>
+        <span class="metric-val emerald" id="admin-metric-attended">0</span>
+        <span style="font-size: 0.74rem; color: var(--emerald); font-family: var(--font-mono); font-weight: 600;" id="admin-metric-rate">0% Attendance</span>
+      </div>
+      <div class="metric-card" style="border-color: rgba(251, 191, 36, 0.25);">
+        <span class="metric-label">Pending Gate Entry</span>
+        <span class="metric-val" id="admin-metric-pending" style="color: #fbbf24;">0</span>
+        <span style="font-size: 0.74rem; color: var(--text-dim); font-family: var(--font-mono);">Awaiting Scan</span>
       </div>
       <div class="metric-card">
         <span class="metric-label">B.Tech Enrollments</span>
         <span class="metric-val" id="admin-metric-btech">0</span>
       </div>
       <div class="metric-card">
-        <span class="metric-label">MBA Tech Enrollments</span>
+        <span class="metric-label">MBA Tech & Other</span>
         <span class="metric-val" id="admin-metric-mbatech">0</span>
-      </div>
-      <div class="metric-card">
-        <span class="metric-label">Other NMIMS Programs</span>
-        <span class="metric-val" id="admin-metric-other">0</span>
       </div>
     </div>
 
@@ -225,9 +234,14 @@
 
       <div class="filter-tabs-group">
         <button type="button" class="filter-tab active" data-program="ALL">All (<span id="count-tab-all">0</span>)</button>
+        <button type="button" class="filter-tab" data-program="CHECKED_IN" style="border-color: rgba(0,223,130,0.3); color: var(--emerald);">
+          ✓ Attended / Scanned (<span id="count-tab-attended">0</span>)
+        </button>
+        <button type="button" class="filter-tab" data-program="CONFIRMED" style="border-color: rgba(251,191,36,0.25); color: #fbbf24;">
+          Pending Entry (<span id="count-tab-pending">0</span>)
+        </button>
         <button type="button" class="filter-tab" data-program="B.Tech">B.Tech (<span id="count-tab-btech">0</span>)</button>
         <button type="button" class="filter-tab" data-program="MBA Tech">MBA Tech (<span id="count-tab-mbatech">0</span>)</button>
-        <button type="button" class="filter-tab" data-program="OTHER">Other (<span id="count-tab-other">0</span>)</button>
       </div>
     </section>
 
@@ -243,17 +257,19 @@
             <tr>
               <th>Pass ID</th>
               <th>Attendee Name</th>
+              <th>Gate Attendance</th>
               <th>SAP ID</th>
               <th>Program / Degree</th>
               <th>Year & Branch</th>
               <th>Contact Email</th>
               <th>Phone</th>
-              <th>Registered At</th>
+              <th>Scan / Registration Time</th>
+              <th style="text-align: right;">Action</th>
             </tr>
           </thead>
           <tbody id="candidates-table-body">
             <tr>
-              <td colspan="8" style="text-align: center; padding: 40px; color: var(--text-muted);">
+              <td colspan="10" style="text-align: center; padding: 40px; color: var(--text-muted);">
                 Loading registrations from MongoDB Atlas...
               </td>
             </tr>

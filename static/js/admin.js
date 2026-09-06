@@ -11,15 +11,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Metrics
   const metricTotal = document.getElementById('admin-metric-total');
+  const metricAttended = document.getElementById('admin-metric-attended');
+  const metricPending = document.getElementById('admin-metric-pending');
+  const metricRate = document.getElementById('admin-metric-rate');
   const metricBtech = document.getElementById('admin-metric-btech');
   const metricMbatech = document.getElementById('admin-metric-mbatech');
-  const metricOther = document.getElementById('admin-metric-other');
 
   // Tab counters
   const countTabAll = document.getElementById('count-tab-all');
+  const countTabAttended = document.getElementById('count-tab-attended');
+  const countTabPending = document.getElementById('count-tab-pending');
   const countTabBtech = document.getElementById('count-tab-btech');
   const countTabMbatech = document.getElementById('count-tab-mbatech');
-  const countTabOther = document.getElementById('count-tab-other');
 
   // Event Switcher Controls
   const eventSelect = document.getElementById('admin-event-select');
@@ -56,19 +59,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Update counters (isolated to this event's database collection!)
       const total = data.total || 0;
+      const attended = data.checked_in || 0;
+      const pending = data.pending !== undefined ? data.pending : Math.max(0, total - attended);
+      const rate = data.attendance_percentage !== undefined ? data.attendance_percentage : (total > 0 ? Math.round((attended / total) * 100) : 0);
       const btech = data.btech_count || 0;
-      const mbatech = data.mbatech_count || 0;
-      const other = data.other_count || 0;
+      const mbatech = (data.mbatech_count || 0) + (data.other_count || 0);
 
       if (metricTotal) metricTotal.textContent = total;
+      if (metricAttended) metricAttended.textContent = attended;
+      if (metricPending) metricPending.textContent = pending;
+      if (metricRate) metricRate.textContent = `${rate}% Attendance Rate`;
       if (metricBtech) metricBtech.textContent = btech;
       if (metricMbatech) metricMbatech.textContent = mbatech;
-      if (metricOther) metricOther.textContent = other;
 
       if (countTabAll) countTabAll.textContent = total;
+      if (countTabAttended) countTabAttended.textContent = attended;
+      if (countTabPending) countTabPending.textContent = pending;
       if (countTabBtech) countTabBtech.textContent = btech;
       if (countTabMbatech) countTabMbatech.textContent = mbatech;
-      if (countTabOther) countTabOther.textContent = other;
 
       // Update header info
       if (adminHeroYear) adminHeroYear.textContent = currentEventName.toUpperCase();
@@ -99,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!list || list.length === 0) {
       tableBody.innerHTML = `
         <tr>
-          <td colspan="8" style="text-align: center; padding: 48px 20px; color: var(--text-muted);">
+          <td colspan="10" style="text-align: center; padding: 48px 20px; color: var(--text-muted);">
             <div style="font-size: 1.05rem; font-weight: 600; color: #fff; margin-bottom: 6px;">
               No registrations found for ${escapeHtml(currentEventName)}
             </div>
@@ -113,6 +121,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     tableBody.innerHTML = list.map(item => {
+      const isCheckedIn = (item.status === 'CHECKED_IN');
+      const statusPill = isCheckedIn 
+        ? `<span class="pass-status-pill admitted" style="font-size: 0.72rem; padding: 3px 8px;">✓ ADMITTED (SCANNED)</span>` 
+        : `<span class="pass-status-pill confirmed" style="font-size: 0.72rem; opacity: 0.7; padding: 3px 8px;">PENDING SCAN</span>`;
+
+      const timeDisplay = isCheckedIn && item.checked_in_at
+        ? `<span style="font-size: 0.8rem; color: var(--emerald); font-family: var(--font-mono); font-weight: 600;">Scanned: ${escapeHtml(item.checked_in_at)}</span>`
+        : `<span style="font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono);">Reg: ${escapeHtml(item.created_at || item.timestamp || '—')}</span>`;
+
       return `
         <tr>
           <td>
@@ -120,6 +137,9 @@ document.addEventListener('DOMContentLoaded', () => {
           </td>
           <td>
             <div style="font-weight: 600; color: #fff;">${escapeHtml(item.name)}</div>
+          </td>
+          <td>
+            ${statusPill}
           </td>
           <td>
             <code style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; font-size: 0.85rem; color: var(--emerald); font-weight: 600; font-family: var(--font-mono);">
@@ -143,13 +163,42 @@ document.addEventListener('DOMContentLoaded', () => {
             </span>
           </td>
           <td>
-            <span style="font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono);">
-              ${escapeHtml(item.created_at || item.timestamp || '—')}
-            </span>
+            ${timeDisplay}
+          </td>
+          <td style="text-align: right;">
+            <button type="button" class="btn-secondary-dark btn-sm btn-admin-toggle-checkin" data-reg-id="${escapeHtml(item.registration_id)}" title="Toggle check-in status" style="padding: 4px 10px; font-size: 0.74rem;">
+              ${isCheckedIn ? 'Undo Check-In' : 'Mark Scanned'}
+            </button>
           </td>
         </tr>
       `;
     }).join('');
+
+    // Attach toggle listeners
+    tableBody.querySelectorAll('.btn-admin-toggle-checkin').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const regId = e.currentTarget.getAttribute('data-reg-id');
+        btn.disabled = true;
+        btn.textContent = '...';
+        try {
+          const res = await fetch('/api/admin/toggle-checkin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ registration_id: regId })
+          });
+          const d = await res.json();
+          if (d.success) {
+            loadAdminData();
+          } else {
+            alert(d.message || 'Error updating status.');
+            btn.disabled = false;
+          }
+        } catch (err) {
+          alert('Network error.');
+          btn.disabled = false;
+        }
+      });
+    });
   }
 
   // Event Switcher dropdown listener
