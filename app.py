@@ -853,6 +853,68 @@ def api_admin_switch_event():
         'active_event_code': event_code
     })
 
+@app.route('/api/admin/delete-event', methods=['POST'])
+def api_admin_delete_event():
+    """
+    Permanently deletes an event and drops its isolated registration collection in MongoDB Atlas.
+    Safety Guardrails:
+    1. Admin authentication required.
+    2. Cannot delete the active live event (must switch first).
+    3. Cannot delete the only remaining event.
+    """
+    if not session.get('admin_auth'):
+        return jsonify({'success': False, 'message': 'Admin authentication required.'}), 403
+
+    data = request.get_json() or {}
+    event_code = (data.get('event_code') or '').strip()
+    if not event_code:
+        return jsonify({'success': False, 'message': 'Event code is required.'}), 400
+
+    ev = events_master_col.find_one({'_id': event_code})
+    if not ev:
+        return jsonify({'success': False, 'message': 'Event not found.'}), 404
+
+    active_code = get_active_event_code()
+    if event_code == active_code:
+        return jsonify({
+            'success': False,
+            'message': 'Cannot delete the active live event. Please switch the live registration form to another event first.'
+        }), 400
+
+    total_events = events_master_col.count_documents({})
+    if total_events <= 1:
+        return jsonify({
+            'success': False,
+            'message': 'Cannot delete the only remaining event in the database.'
+        }), 400
+
+    # Determine collection name to drop
+    col_name = ev.get('collection_name') or ('registrations' if event_code == 'findrome_2026' else f"registrations_{event_code}")
+
+    # Drop the dedicated registrations collection
+    try:
+        db.drop_collection(col_name)
+    except Exception as e:
+        print(f"Notice dropping collection {col_name}: {e}")
+
+    # Delete the master event record
+    events_master_col.delete_one({'_id': event_code})
+
+    # Clear from tracking
+    _indexed_collections.discard(col_name)
+
+    # Invalidate cache
+    invalidate_cache()
+
+    event_display_title = f"{ev.get('event_name', 'Event')} {ev.get('event_edition', '')}".strip()
+
+    return jsonify({
+        'success': True,
+        'message': f"Event '{event_display_title}' and its registrations were permanently deleted.",
+        'deleted_event_code': event_code
+    })
+
+
 @app.route('/api/admin/event-config', methods=['POST'])
 def api_admin_event_config():
     """Allows Administrator to update Event Dates, Venue, and Info in MongoDB Atlas."""

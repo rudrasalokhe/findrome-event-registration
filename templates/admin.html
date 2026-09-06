@@ -184,6 +184,15 @@
           </svg>
           <span>+ New Event</span>
         </button>
+        <button type="button" class="btn-danger-dark btn-sm" id="btn-open-delete-modal" title="Delete this event and its registrations">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            <line x1="10" y1="11" x2="10" y2="17"></line>
+            <line x1="14" y1="11" x2="14" y2="17"></line>
+          </svg>
+          <span>Delete Event</span>
+        </button>
       </div>
     </div>
 
@@ -395,6 +404,68 @@
           <button type="submit" class="btn-emerald-primary" id="btn-submit-new-event" style="flex: 2;">Create & Launch Event</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Modal: Delete Event Confirmation -->
+  <div class="modal-overlay" id="delete-event-modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+    <div class="ticket-pass-card drawer-modal" style="max-width: 480px; border-color: rgba(255, 82, 82, 0.3);">
+      <div class="drawer-header" style="border-bottom-color: rgba(255, 82, 82, 0.2);">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(255, 82, 82, 0.15); display: flex; align-items: center; justify-content: center; color: #ff5252; flex-shrink: 0;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              <line x1="10" y1="11" x2="10" y2="17"></line>
+              <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+          </div>
+          <div>
+            <h3 id="delete-modal-title" class="drawer-title" style="color: #ff8080;">Delete Event</h3>
+            <p style="font-size: 0.78rem; color: var(--text-muted);">Permanently remove event database</p>
+          </div>
+        </div>
+        <button type="button" class="drawer-close-btn" id="btn-close-delete-modal" aria-label="Close modal">✕</button>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <p style="font-size: 0.88rem; color: var(--text-primary); line-height: 1.5;">
+          Are you sure you want to permanently delete <strong id="delete-event-name-target" style="color: #fff;"></strong>?
+        </p>
+
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px 14px; font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+            <span>Registered Attendees:</span>
+            <strong id="delete-event-attendees-count" style="color: #fff;">0</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>MongoDB Collection:</span>
+            <code id="delete-event-col-name" style="color: #ff8080; font-family: var(--font-mono); font-size: 0.78rem;"></code>
+          </div>
+        </div>
+
+        <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.45;">
+          ⚠️ This action will drop the dedicated MongoDB collection and remove all registration records for this event. <strong>This cannot be undone.</strong>
+        </p>
+
+        <!-- Guardrail warning banner when active live event or single event -->
+        <div id="delete-event-guardrail-warning" style="display: none; padding: 10px 12px; background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.35); border-radius: 6px; font-size: 0.82rem; color: #fbbf24; line-height: 1.4;">
+          This event is currently LIVE. Please switch the live form to another event before deleting.
+        </div>
+
+        <div id="delete-event-alert" style="display: none; padding: 10px 12px; border-radius: 6px; font-size: 0.82rem;"></div>
+
+        <div style="display: flex; gap: 10px; margin-top: 4px;">
+          <button type="button" class="btn-secondary-dark" id="btn-cancel-delete-event" style="flex: 1;">Cancel</button>
+          <button type="button" class="btn-danger-primary" id="btn-confirm-delete-event" style="flex: 2;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            <span>Permanently Delete</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 

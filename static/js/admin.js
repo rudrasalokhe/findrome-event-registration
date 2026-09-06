@@ -545,6 +545,164 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // ── Delete Event Modal Controller ──
+  const deleteEventModal = document.getElementById('delete-event-modal');
+  const btnOpenDeleteModal = document.getElementById('btn-open-delete-modal');
+  const btnCloseDeleteModal = document.getElementById('btn-close-delete-modal');
+  const btnCancelDeleteEvent = document.getElementById('btn-cancel-delete-event');
+  const btnConfirmDeleteEvent = document.getElementById('btn-confirm-delete-event');
+
+  const deleteEventNameTarget = document.getElementById('delete-event-name-target');
+  const deleteEventAttendeesCount = document.getElementById('delete-event-attendees-count');
+  const deleteEventColName = document.getElementById('delete-event-col-name');
+  const deleteEventGuardrailWarning = document.getElementById('delete-event-guardrail-warning');
+  const deleteEventAlert = document.getElementById('delete-event-alert');
+
+  if (btnOpenDeleteModal && deleteEventModal) {
+    btnOpenDeleteModal.addEventListener('click', () => {
+      if (deleteEventAlert) deleteEventAlert.style.display = 'none';
+      if (deleteEventGuardrailWarning) deleteEventGuardrailWarning.style.display = 'none';
+
+      const eventName = currentEventName || selectedEventCode;
+      if (deleteEventNameTarget) deleteEventNameTarget.textContent = eventName;
+      
+      const totalAttendees = (metricTotal && metricTotal.textContent) ? metricTotal.textContent : '0';
+      if (deleteEventAttendeesCount) deleteEventAttendeesCount.textContent = totalAttendees;
+
+      const colName = (selectedEventCode === 'findrome_2026') ? 'registrations' : `registrations_${selectedEventCode}`;
+      if (deleteEventColName) deleteEventColName.textContent = colName;
+
+      // Check guardrails:
+      // 1. Is it the active live event?
+      const isLiveActive = (selectedEventCode === activeLiveCode);
+      // 2. Is it the only remaining event?
+      const isOnlyEvent = (eventSelect && eventSelect.options.length <= 1);
+
+      if (isLiveActive) {
+        deleteEventGuardrailWarning.textContent = '⚠️ This event is currently set as the LIVE public form. Please set another event as the live form before deleting this event.';
+        deleteEventGuardrailWarning.style.display = 'block';
+        if (btnConfirmDeleteEvent) {
+          btnConfirmDeleteEvent.disabled = true;
+          btnConfirmDeleteEvent.title = 'Cannot delete active live event';
+        }
+      } else if (isOnlyEvent) {
+        deleteEventGuardrailWarning.textContent = '⚠️ Cannot delete the only remaining event in the database.';
+        deleteEventGuardrailWarning.style.display = 'block';
+        if (btnConfirmDeleteEvent) {
+          btnConfirmDeleteEvent.disabled = true;
+          btnConfirmDeleteEvent.title = 'Cannot delete sole remaining event';
+        }
+      } else {
+        if (btnConfirmDeleteEvent) {
+          btnConfirmDeleteEvent.disabled = false;
+          btnConfirmDeleteEvent.title = 'Permanently delete this event';
+          btnConfirmDeleteEvent.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            <span>Permanently Delete</span>
+          `;
+        }
+      }
+
+      deleteEventModal.classList.add('active');
+    });
+
+    const closeDeleteModal = () => deleteEventModal.classList.remove('active');
+    if (btnCloseDeleteModal) btnCloseDeleteModal.addEventListener('click', closeDeleteModal);
+    if (btnCancelDeleteEvent) btnCancelDeleteEvent.addEventListener('click', closeDeleteModal);
+
+    deleteEventModal.addEventListener('click', (e) => {
+      if (e.target === deleteEventModal) closeDeleteModal();
+    });
+
+    if (btnConfirmDeleteEvent) {
+      btnConfirmDeleteEvent.addEventListener('click', async () => {
+        btnConfirmDeleteEvent.disabled = true;
+        btnConfirmDeleteEvent.textContent = 'Deleting from MongoDB Atlas...';
+        if (deleteEventAlert) deleteEventAlert.style.display = 'none';
+
+        try {
+          const res = await fetch('/api/admin/delete-event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event_code: selectedEventCode })
+          });
+
+          const data = await res.json();
+          if (res.ok && data.success) {
+            deleteEventAlert.style.display = 'block';
+            deleteEventAlert.style.background = 'rgba(0, 223, 130, 0.1)';
+            deleteEventAlert.style.border = '1px solid rgba(0, 223, 130, 0.3)';
+            deleteEventAlert.style.color = '#00df82';
+            deleteEventAlert.textContent = data.message;
+
+            // Remove option from dropdown
+            const optToRemove = eventSelect ? eventSelect.querySelector(`option[value="${selectedEventCode}"]`) : null;
+            if (optToRemove) optToRemove.remove();
+
+            // Switch selectedEventCode to active live code or first available
+            if (eventSelect && eventSelect.options.length > 0) {
+              const liveOpt = eventSelect.querySelector(`option[value="${activeLiveCode}"]`);
+              if (liveOpt) {
+                eventSelect.value = activeLiveCode;
+                selectedEventCode = activeLiveCode;
+              } else {
+                eventSelect.selectedIndex = 0;
+                selectedEventCode = eventSelect.value;
+              }
+            }
+
+            // Reload admin data for the newly selected event
+            loadAdminData();
+
+            setTimeout(() => {
+              closeDeleteModal();
+              btnConfirmDeleteEvent.disabled = false;
+              btnConfirmDeleteEvent.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+                <span>Permanently Delete</span>
+              `;
+            }, 900);
+          } else {
+            deleteEventAlert.style.display = 'block';
+            deleteEventAlert.style.background = 'rgba(255, 82, 82, 0.1)';
+            deleteEventAlert.style.border = '1px solid rgba(255, 82, 82, 0.3)';
+            deleteEventAlert.style.color = '#ff8080';
+            deleteEventAlert.textContent = data.message || 'Failed to delete event.';
+            btnConfirmDeleteEvent.disabled = false;
+            btnConfirmDeleteEvent.innerHTML = `
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+              <span>Permanently Delete</span>
+            `;
+          }
+        } catch (err) {
+          deleteEventAlert.style.display = 'block';
+          deleteEventAlert.style.background = 'rgba(255, 82, 82, 0.1)';
+          deleteEventAlert.style.border = '1px solid rgba(255, 82, 82, 0.3)';
+          deleteEventAlert.style.color = '#ff8080';
+          deleteEventAlert.textContent = 'Network error deleting event.';
+          btnConfirmDeleteEvent.disabled = false;
+          btnConfirmDeleteEvent.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            <span>Permanently Delete</span>
+          `;
+        }
+      });
+    }
+  }
+
   // Initial load
   loadAdminData();
 });
+
