@@ -57,6 +57,54 @@ def run_tests():
         else:
             raise
 
+    # Test 2b: Duplicate Email Rejection (different SAP ID, same email)
+    dup_email_req = urllib.request.Request(
+        f'{BASE}/api/register',
+        data=json.dumps({
+            'name': 'Duplicate Email Tester',
+            'email': 'priya.sharma@nmims.edu',
+            'phone': '9819876549',
+            'sap_id': '70012023999', # Different SAP ID!
+            'program': 'B.Tech',
+            'year_of_study': '1st Year',
+            'branch': 'Cyber Security'
+        }).encode('utf-8'),
+        headers={'Content-Type': 'application/json'},
+        method='POST'
+    )
+    try:
+        opener.open(dup_email_req)
+        assert False, "Duplicate email registration should have been rejected with 409!"
+    except urllib.error.HTTPError as e:
+        assert e.code == 409
+        dup_res = json.loads(e.read().decode('utf-8'))
+        assert 'email' in dup_res.get('errors', {})
+        print("  Test 2b: Duplicate Email correctly rejected with 409 ('A registration with this email address already exists for this event.').")
+
+    # Test 2c: Duplicate Email Case-Insensitive Rejection (UPPERCASE)
+    upper_email_req = urllib.request.Request(
+        f'{BASE}/api/register',
+        data=json.dumps({
+            'name': 'Upper Case Email Tester',
+            'email': 'PRIYA.SHARMA@NMIMS.EDU',
+            'phone': '9819876548',
+            'sap_id': '70012023888',
+            'program': 'B.Tech',
+            'year_of_study': '1st Year',
+            'branch': 'Cyber Security'
+        }).encode('utf-8'),
+        headers={'Content-Type': 'application/json'},
+        method='POST'
+    )
+    try:
+        opener.open(upper_email_req)
+        assert False, "Uppercase duplicate email registration should have been rejected with 409!"
+    except urllib.error.HTTPError as e:
+        assert e.code == 409
+        dup_res = json.loads(e.read().decode('utf-8'))
+        assert 'email' in dup_res.get('errors', {})
+        print("  Test 2c: Case-insensitive duplicate email correctly rejected with 409.")
+
     # Test 3: Pass Lookup ("Find My Pass") from MongoDB
     resp = opener.open(f'{BASE}/api/lookup?query={candidate_sap}')
     assert resp.status == 200

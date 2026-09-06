@@ -60,6 +60,24 @@ DEFAULT_EVENT_SETTINGS = {
     'created_at': '2026-03-01 00:00:00'
 }
 
+def ensure_collection_indexes(col):
+    """
+    Ensures unique indexes for sap_id, registration_id, and email on an event collection.
+    Safely drops any legacy non-unique email_1 index and rebuilds it with unique=True.
+    """
+    try:
+        idx_info = col.index_information()
+        if 'email_1' in idx_info and not idx_info['email_1'].get('unique'):
+            try:
+                col.drop_index('email_1')
+            except Exception as drop_err:
+                print(f"Index drop notice on {col.name}: {drop_err}")
+        col.create_index([('sap_id', ASCENDING)], unique=True)
+        col.create_index([('registration_id', ASCENDING)], unique=True)
+        col.create_index([('email', ASCENDING)], unique=True)
+    except Exception as e:
+        print(f"Index setup notice on {col.name}: {e}")
+
 def init_event_defaults():
     """Ensure findrome_2026 exists in events_master and active_event_code is set."""
     try:
@@ -83,9 +101,7 @@ def init_event_defaults():
         
         # Pre-index default registrations collection
         legacy_col = db['registrations']
-        legacy_col.create_index([('sap_id', ASCENDING)], unique=True)
-        legacy_col.create_index([('registration_id', ASCENDING)], unique=True)
-        legacy_col.create_index([('email', ASCENDING)])
+        ensure_collection_indexes(legacy_col)
         print("MongoDB Atlas multi-event system and default indexes initialized.")
     except Exception as e:
         print(f"MongoDB event setup note: {e}")
@@ -153,13 +169,8 @@ def get_registrations_col(event_code=None):
     
     # Initialize indexes ONCE per collection, not on every request
     if col_name not in _indexed_collections:
-        try:
-            col.create_index([('sap_id', ASCENDING)], unique=True)
-            col.create_index([('registration_id', ASCENDING)], unique=True)
-            col.create_index([('email', ASCENDING)])
-            _indexed_collections.add(col_name)
-        except Exception:
-            pass
+        ensure_collection_indexes(col)
+        _indexed_collections.add(col_name)
     return col
 
 @app.context_processor
@@ -237,7 +248,7 @@ def register():
     data = request.get_json() or {}
     
     name = (data.get('name') or '').strip()
-    email = (data.get('email') or '').strip()
+    email = (data.get('email') or '').strip().lower()
     phone = (data.get('phone') or '').strip()
     sap_id = (data.get('sap_id') or '').strip()
     program = (data.get('program') or '').strip()
@@ -287,11 +298,18 @@ def register():
 
     # Duplicate check in MongoDB Atlas (Isolated to this active event!)
     col = get_registrations_col()
-    existing = col.find_one({'sap_id': sap_id})
-    if existing:
+    existing_sap = col.find_one({'sap_id': sap_id})
+    if existing_sap:
         return jsonify({
             'success': False,
             'errors': {'sap_id': 'A registration with this SAP ID already exists for this event.'}
+        }), 409
+
+    existing_email = col.find_one({'email': email})
+    if existing_email:
+        return jsonify({
+            'success': False,
+            'errors': {'email': 'A registration with this email address already exists for this event.'}
         }), 409
 
     # Generate unique ticket ID
@@ -327,11 +345,23 @@ def register():
 
     try:
         col.insert_one(record)
-    except DuplicateKeyError:
-        return jsonify({
-            'success': False,
-            'errors': {'sap_id': 'A registration with this SAP ID already exists for this event.'}
-        }), 409
+    except DuplicateKeyError as e:
+        err_msg = str(e).lower()
+        if 'email' in err_msg:
+            return jsonify({
+                'success': False,
+                'errors': {'email': 'A registration with this email address already exists for this event.'}
+            }), 409
+        elif 'sap_id' in err_msg:
+            return jsonify({
+                'success': False,
+                'errors': {'sap_id': 'A registration with this SAP ID already exists for this event.'}
+            }), 409
+        else:
+            return jsonify({
+                'success': False,
+                'errors': {'sap_id': 'A registration with this SAP ID or Email already exists for this event.'}
+            }), 409
 
     return jsonify({
         'success': True,
@@ -438,7 +468,8 @@ def verify_ticket():
     doc = target_col.find_one({
         '$or': [
             {'registration_id': query_code},
-            {'sap_id': raw_code}
+            {'sap_id': raw_code},
+            {'email': raw_code.lower()}
         ]
     })
 
@@ -451,7 +482,8 @@ def verify_ticket():
                     found = past_col.find_one({
                         '$or': [
                             {'registration_id': query_code},
-                            {'sap_id': raw_code}
+                            {'sap_id': raw_code},
+                            {'email': raw_code.lower()}
                         ]
                     })
                     if found:
@@ -497,6 +529,46 @@ def verify_ticket():
         'checked_in_at': now_str,
         'data': format_doc(doc)
     }), 200
+
+@app.route('/api/volunteer/toggle-checkin', methods=['POST'])
+def volunteer_toggle_checkin():
+    if not session.get('volunteer_auth') and not session.get('admin_auth'):
+        return jsonify({'success': False, 'message': 'Unauthorized: Volunteer PIN required.'}), 403
+
+    data = request.get_json() or {}
+    reg_id = (data.get('registration_id') or '').strip()
+
+    if not reg_id:
+        return jsonify({'success': False, 'message': 'Registration ID required.'}), 400
+
+    target_col = get_registrations_col()
+    doc = target_col.find_one({'registration_id': reg_id})
+    if not doc:
+        for ev in events_master_col.find():
+            if ev.get('event_code') != get_active_event_code():
+                c = get_registrations_col(ev.get('event_code'))
+                found = c.find_one({'registration_id': reg_id})
+                if found:
+                    doc = found
+                    target_col = c
+                    break
+
+    if not doc:
+        return jsonify({'success': False, 'message': 'Record not found.'}), 404
+
+    if doc.get('status') == 'CHECKED_IN':
+        target_col.update_one(
+            {'_id': doc['_id']},
+            {'$set': {'status': 'CONFIRMED', 'checked_in_at': None}}
+        )
+        return jsonify({'success': True, 'status': 'CONFIRMED', 'message': f'Admission for {doc.get("name")} reset to Confirmed.'})
+    else:
+        now_str = datetime.now().strftime('%b %d, %Y %I:%M:%S %p')
+        target_col.update_one(
+            {'_id': doc['_id']},
+            {'$set': {'status': 'CHECKED_IN', 'checked_in_at': now_str}}
+        )
+        return jsonify({'success': True, 'status': 'CHECKED_IN', 'message': f'{doc.get("name")} admitted and checked in.'})
 
 @app.route('/api/check-in-stats', methods=['GET'])
 def check_in_stats():
@@ -713,12 +785,8 @@ def api_admin_create_event():
 
     # Initialize unique indexes for this dedicated collection
     new_col = db[col_name]
-    try:
-        new_col.create_index([('sap_id', ASCENDING)], unique=True)
-        new_col.create_index([('registration_id', ASCENDING)], unique=True)
-        new_col.create_index([('email', ASCENDING)])
-    except Exception as e:
-        print(f"Index setup error for {col_name}: {e}")
+    ensure_collection_indexes(new_col)
+    _indexed_collections.add(col_name)
 
     # If active, switch live registration form to this event
     if is_active:
@@ -931,4 +999,4 @@ def admin_toggle_checkin():
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print(f"Findrome NMIMS Server running on port {port}")
-    app.run(host='127.0.0.1', port=port, debug=True)
+    app.run(host='127.0.0.1', port=port, debug=True, use_reloader=False)

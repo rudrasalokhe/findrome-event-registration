@@ -205,21 +205,22 @@ document.addEventListener('DOMContentLoaded', () => {
     return isValid;
   }
 
-  // ── Render Scannable QR Code (Safe Guard) ──
+  // ── Render Scannable QR Code (High-Contrast for Fast Gate Camera Scans) ──
   function renderTicketQrCode(textPayload) {
-    if (!ticketQrCodeContainer) return;
-    ticketQrCodeContainer.innerHTML = '';
+    const qrContainer = document.getElementById('ticket-qrcode-render');
+    if (!qrContainer) return;
+    qrContainer.innerHTML = '';
     if (typeof QRCode !== 'undefined') {
-      qrCodeInstance = new QRCode(ticketQrCodeContainer, {
+      qrCodeInstance = new QRCode(qrContainer, {
         text: textPayload,
-        width: 108,
-        height: 108,
+        width: 118,
+        height: 118,
         colorDark: "#0d110f",
         colorLight: "#ffffff",
         correctLevel: QRCode.CorrectLevel.M
       });
     } else {
-      ticketQrCodeContainer.textContent = textPayload;
+      qrContainer.textContent = textPayload;
     }
   }
 

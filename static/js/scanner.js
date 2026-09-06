@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const resValName = document.getElementById('res-val-name');
   const resValPass = document.getElementById('res-val-pass');
   const resValSap = document.getElementById('res-val-sap');
+  const resValEmail = document.getElementById('res-val-email');
   const resValProgram = document.getElementById('res-val-program');
   const resValTime = document.getElementById('res-val-time');
 
@@ -188,6 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
       resValName.textContent = data.name || '—';
       resValPass.textContent = data.registration_id || '—';
       resValSap.textContent = data.sap_id || '—';
+      if (resValEmail) resValEmail.textContent = data.email || '—';
       resValProgram.textContent = `${data.program || ''} • ${data.branch || ''}`;
       resValTime.textContent = result.checked_in_at || 'Just now';
 
@@ -206,6 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
       resValName.textContent = data.name || '—';
       resValPass.textContent = data.registration_id || '—';
       resValSap.textContent = data.sap_id || '—';
+      if (resValEmail) resValEmail.textContent = data.email || '—';
       resValProgram.textContent = `${data.program || ''} • ${data.branch || ''}`;
       resValTime.textContent = result.checked_in_at || 'Previously Admitted';
 
@@ -269,20 +272,45 @@ document.addEventListener('DOMContentLoaded', () => {
       metricRate.textContent = `${data.attendance_percentage}%`;
       metricPending.textContent = Math.max(0, data.total_registered - data.total_checked_in);
 
-      // Render recent checkins
+      // Render recent checkins with live Undo capability
       if (data.recent_checkins && data.recent_checkins.length > 0) {
         feedContainer.innerHTML = data.recent_checkins.map(item => `
           <div class="checkin-feed-item">
             <div class="feed-item-left">
               <span class="feed-item-name">${escapeHtml(item.name)}</span>
               <span class="feed-item-meta">SAP: ${escapeHtml(item.sap_id)} • ${escapeHtml(item.program || '')} (${escapeHtml(item.branch || '')})</span>
+              <span class="feed-item-meta" style="color: var(--accent-emerald); font-size: 0.74rem;">${escapeHtml(item.registration_id)} • ${escapeHtml(item.checked_in_at || 'Admitted')}</span>
             </div>
-            <div style="text-align: right;">
-              <span class="feed-item-time">${escapeHtml(item.checked_in_at ? item.checked_in_at.split(' ')[3] + ' ' + (item.checked_in_at.split(' ')[4] || '') : 'Admitted')}</span>
-              <div style="font-size: 0.72rem; color: var(--text-dim);">${escapeHtml(item.registration_id)}</div>
+            <div style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+              <button type="button" class="btn-undo-checkin" data-reg-id="${escapeHtml(item.registration_id)}" title="Reset admission status">
+                Undo
+              </button>
             </div>
           </div>
         `).join('');
+
+        // Attach undo checkin listeners
+        feedContainer.querySelectorAll('.btn-undo-checkin').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            const regId = e.currentTarget.getAttribute('data-reg-id');
+            if (!confirm(`Reset check-in status for Pass ${regId}?`)) return;
+            try {
+              const res = await fetch('/api/volunteer/toggle-checkin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ registration_id: regId })
+              });
+              const d = await res.json();
+              if (d.success) {
+                fetchStats();
+              } else {
+                alert(d.message || 'Could not reset check-in status.');
+              }
+            } catch (err) {
+              console.error('Error undoing checkin:', err);
+            }
+          });
+        });
       } else {
         feedContainer.innerHTML = `
           <p style="color: var(--text-dim); font-size: 0.85rem; text-align: center; padding: 24px;">
@@ -296,82 +324,117 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ── Camera Scanner Initialization via html5-qrcode ──
+  let currentFacingMode = "environment";
+
   async function startCamera() {
     if (typeof Html5Qrcode === 'undefined') {
-      cameraLabelText.textContent = 'Scanner library loading...';
+      cameraLabelText.textContent = 'Loading QR camera engine...';
+      setTimeout(startCamera, 500);
       return;
     }
 
     try {
-      html5QrCode = new Html5Qrcode("camera-viewport");
+      if (!html5QrCode) {
+        html5QrCode = new Html5Qrcode("camera-viewport");
+      }
 
-      const devices = await Html5Qrcode.getCameras();
-      if (devices && devices.length) {
-        availableCameras = devices;
-        cameraLabelText.textContent = `Camera connected (${devices.length} available)`;
+      const config = {
+        fps: 15,
+        qrbox: { width: 240, height: 240 },
+        aspectRatio: 1.0
+      };
 
-        // Prefer back camera ("environment")
-        let preferredCameraId = devices[0].id;
-        for (let dev of devices) {
-          if (dev.label.toLowerCase().includes('back') || dev.label.toLowerCase().includes('rear') || dev.label.toLowerCase().includes('environment')) {
-            preferredCameraId = dev.id;
-            break;
-          }
+      const onScanSuccess = (decodedText) => {
+        if (isScanningActive) {
+          console.log("Scanned QR Code:", decodedText);
+          verifyPass(decodedText);
         }
+      };
 
-        const config = {
-          fps: 15,
-          qrbox: { width: 250, height: 250 },
-          aspectRatio: 1.333
-        };
-
-        await html5QrCode.start(
-          preferredCameraId,
-          config,
-          (decodedText) => {
-            if (isScanningActive) {
-              console.log("Scanned QR Code:", decodedText);
-              verifyPass(decodedText);
-            }
-          },
-          (errorMessage) => {
-            // normal frame without QR code
-          }
-        );
-
-        cameraLabelText.textContent = 'Scanner active: Point at candidate pass';
-      } else {
-        cameraLabelText.textContent = 'No camera found. Use manual entry below.';
+      try {
+        await html5QrCode.start({ facingMode: currentFacingMode }, config, onScanSuccess, () => {});
+        cameraLabelText.textContent = `Camera active (${currentFacingMode === 'environment' ? 'Rear' : 'Front'}): Point at delegate pass`;
+      } catch (err1) {
+        // Try fallback to any available camera device
+        const devices = await Html5Qrcode.getCameras();
+        if (devices && devices.length > 0) {
+          availableCameras = devices;
+          await html5QrCode.start(devices[0].id, config, onScanSuccess, () => {});
+          cameraLabelText.textContent = 'Camera active: Point at candidate pass';
+        } else {
+          cameraLabelText.textContent = 'Camera unavailable. Use manual entry or upload image.';
+        }
       }
     } catch (err) {
       console.warn('Camera start issue:', err);
-      cameraLabelText.textContent = 'Camera unavailable. Use manual entry below.';
+      cameraLabelText.textContent = 'Camera unavailable. Use manual entry or upload image.';
     }
   }
 
-  // Switch camera button
+  // Flip Camera button
   btnToggleCamera.addEventListener('click', async () => {
-    if (!html5QrCode || availableCameras.length < 2) {
-      alert('Only one camera device detected on this system.');
-      return;
-    }
+    if (!html5QrCode) return;
     try {
       await html5QrCode.stop();
-      currentCameraIndex = (currentCameraIndex + 1) % availableCameras.length;
-      const nextCamera = availableCameras[currentCameraIndex];
-      cameraLabelText.textContent = `Switched to: ${nextCamera.label || 'Camera ' + (currentCameraIndex + 1)}`;
+      currentFacingMode = (currentFacingMode === "environment") ? "user" : "environment";
+      cameraLabelText.textContent = 'Switching camera...';
+      const config = {
+        fps: 15,
+        qrbox: { width: 240, height: 240 },
+        aspectRatio: 1.0
+      };
       await html5QrCode.start(
-        nextCamera.id,
-        { fps: 15, qrbox: { width: 250, height: 250 } },
+        { facingMode: currentFacingMode },
+        config,
         (decodedText) => {
           if (isScanningActive) verifyPass(decodedText);
         },
         () => {}
       );
+      cameraLabelText.textContent = `Camera active (${currentFacingMode === 'environment' ? 'Rear' : 'Front'}): Point at pass`;
     } catch (err) {
-      console.error('Camera switch error:', err);
+      console.error('Camera flip error:', err);
+      // Try device list switch
+      try {
+        const devices = await Html5Qrcode.getCameras();
+        if (devices && devices.length > 1) {
+          currentCameraIndex = (currentCameraIndex + 1) % devices.length;
+          await html5QrCode.start(devices[currentCameraIndex].id, { fps: 15, qrbox: { width: 240, height: 240 } }, (text) => { if (isScanningActive) verifyPass(text); }, () => {});
+          cameraLabelText.textContent = `Camera active: ${devices[currentCameraIndex].label || 'Camera ' + (currentCameraIndex + 1)}`;
+        }
+      } catch (fallbackErr) {
+        console.error('Fallback switch error:', fallbackErr);
+      }
     }
   });
+
+  // Image Upload / Photo Scan
+  const qrFileInput = document.getElementById('qr-file-input');
+  if (qrFileInput) {
+    qrFileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      cameraLabelText.textContent = 'Scanning QR image file...';
+      try {
+        if (!html5QrCode) {
+          html5QrCode = new Html5Qrcode("camera-viewport");
+        }
+        const decodedText = await html5QrCode.scanFile(file, true);
+        if (decodedText) {
+          cameraLabelText.textContent = 'QR Code detected!';
+          verifyPass(decodedText);
+        } else {
+          showResult('invalid', { message: 'No readable QR code found in uploaded image.' });
+        }
+      } catch (err) {
+        console.warn('File scan error:', err);
+        showResult('invalid', { message: 'Could not read QR code from this image. Please ensure the QR code is clearly visible.' });
+      } finally {
+        qrFileInput.value = '';
+      }
+    });
+  }
 
   function escapeHtml(str) {
     if (!str) return '';

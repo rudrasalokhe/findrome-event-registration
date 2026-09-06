@@ -189,24 +189,35 @@
             <span class="pulse-dot" style="width: 7px; height: 7px;"></span>
             <span id="camera-label-text">Initializing camera feed...</span>
           </div>
-          <button type="button" class="btn-secondary-dark" id="btn-toggle-camera" style="padding: 8px 18px; font-size: 0.82rem;">
-            Switch Camera
-          </button>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <label for="qr-file-input" class="btn-secondary-dark" style="padding: 8px 14px; font-size: 0.82rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;" title="Scan QR Code from saved image or photo">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+              <span>Scan QR Image</span>
+              <input type="file" id="qr-file-input" accept="image/*" style="display: none;">
+            </label>
+            <button type="button" class="btn-secondary-dark" id="btn-toggle-camera" style="padding: 8px 14px; font-size: 0.82rem;">
+              Flip Camera
+            </button>
+          </div>
         </div>
 
-        <!-- Manual Pass ID / SAP ID Fast Fallback -->
-        <div style="margin-top: 10px;">
+        <!-- Manual Pass ID / SAP ID / Email Fast Fallback -->
+        <div style="margin-top: 14px;">
           <label for="manual-code-input" class="field-label" style="font-size: 0.8rem; margin-bottom: 6px; display: block;">
-            Manual Entry (Pass Code or SAP ID):
+            Manual Entry (Pass Code, SAP ID, or Email):
           </label>
           <form id="manual-verify-form" class="manual-input-box">
             <input 
               type="text" 
               id="manual-code-input" 
-              placeholder="e.g. FD-NMIMS-7824 or 70012345678" 
+              placeholder="e.g. FD-NMIMS-1641, 70012023777, or student@nmims.edu" 
               autocomplete="off"
             >
-            <button type="submit" class="btn-emerald-primary">Verify</button>
+            <button type="submit" class="btn-emerald-primary">Verify & Admit</button>
           </form>
         </div>
       </section>
@@ -253,6 +264,10 @@
         <div class="result-row">
           <span class="result-row-label">SAP ID</span>
           <span class="result-row-val" id="res-val-sap">—</span>
+        </div>
+        <div class="result-row">
+          <span class="result-row-label">Email</span>
+          <span class="result-row-val" id="res-val-email">—</span>
         </div>
         <div class="result-row">
           <span class="result-row-label">Program & Branch</span>

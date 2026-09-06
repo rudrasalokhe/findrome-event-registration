@@ -376,22 +376,26 @@
           </div>
         </div>
 
-        <!-- Venue & Access Authorized Strip (Open Event Pass) -->
-        <div class="ticket-access-area">
+        <!-- QR Code Verification Section -->
+        <div class="ticket-qr-area">
           <div class="ticket-access-meta">
-            <span class="ticket-detail-label">Venue & Access</span>
+            <span class="ticket-detail-label">Entry Verification</span>
             <div style="font-size: 0.88rem; font-weight: 700; color: #fff;" id="ticket-venue-display">{{ settings.event_venue }}</div>
             <div style="font-size: 0.78rem; color: var(--text-dim);" id="ticket-time-display">{{ settings.event_dates }}</div>
-          </div>
-          <div class="ticket-status-seal">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-              <polyline points="9 12 11 14 15 10"></polyline>
-            </svg>
-            <div class="seal-text">
-              <span class="seal-title">ENTRY GRANTED</span>
-              <span class="seal-sub">ALL-ACCESS DELEGATE</span>
+            <div class="ticket-status-seal" style="margin-top: 10px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                <polyline points="9 12 11 14 15 10"></polyline>
+              </svg>
+              <div class="seal-text">
+                <span class="seal-title">SCAN AT GATE</span>
+                <span class="seal-sub">OFFICIAL ADMISSION QR</span>
+              </div>
             </div>
+          </div>
+          <div class="qr-code-wrapper">
+            <div id="ticket-qrcode-render"></div>
+            <span class="qr-scan-hint">Scan at Entrance</span>
           </div>
         </div>
       </div>

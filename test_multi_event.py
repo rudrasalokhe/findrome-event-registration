@@ -102,13 +102,72 @@ def test_multi_event():
     assert status == 201 and res['success'], f"Registration with same SAP ID failed: {res}"
     print("  Test 7: PASS! Student with SAP ID 70012023777 successfully registered for the new event without duplicate collision!")
 
-    # 8. Verify Admin View on New Event now has EXACTLY 1 registration
+    # 7a. Reject Duplicate Email within the SAME event (different SAP ID)
+    dup_email_payload = {
+        'name': 'Duplicate Email Candidate',
+        'email': 'delegate2027@nmims.edu', # Same email!
+        'phone': '9876543219',
+        'sap_id': '70012023888', # Different SAP ID
+        'program': 'B.Tech',
+        'year_of_study': '2nd Year',
+        'branch': 'Information Technology'
+    }
+    status, res = request('POST', '/api/register', dup_email_payload)
+    assert status == 409, f"Expected 409 for duplicate email, got {status}: {res}"
+    assert res and 'email' in res.get('errors', {}), f"Expected email error in response, got: {res}"
+    print("  Test 7a: PASS! Duplicate email in same event correctly blocked with 409 ('A registration with this email address already exists for this event.').")
+
+    # 7b. Case-Insensitive Email Duplicate Check (UPPERCASE)
+    upper_email_payload = {
+        'name': 'Case Check Candidate',
+        'email': 'DELEGATE2027@NMIMS.EDU', # Uppercase same email
+        'phone': '9876543218',
+        'sap_id': '70012023999',
+        'program': 'MBA Tech',
+        'year_of_study': '1st Year',
+        'branch': 'Computer Engineering'
+    }
+    status, res = request('POST', '/api/register', upper_email_payload)
+    assert status == 409, f"Expected 409 for uppercase duplicate email, got {status}: {res}"
+    assert res and 'email' in res.get('errors', {}), f"Expected email error in response, got: {res}"
+    print("  Test 7b: PASS! Case-insensitive duplicate email ('DELEGATE2027@NMIMS.EDU') correctly blocked with 409.")
+
+    # 7c. Cross-Event Email Allowance: Email from findrome_2026 ('priya.sharma@nmims.edu') CAN register for new event
+    cross_event_payload = {
+        'name': 'Priya Sharma (2027 Edition)',
+        'email': 'priya.sharma@nmims.edu', # Registered in 2026, registering for new event 2027!
+        'phone': '9819876543',
+        'sap_id': '70012023555',
+        'program': 'MBA Tech',
+        'year_of_study': '3rd Year',
+        'branch': 'Data Science'
+    }
+    status, res = request('POST', '/api/register', cross_event_payload)
+    assert status == 201 and res['success'], f"Failed to register same email for different event: {res}"
+    print("  Test 7c: PASS! Existing email from 2026 ('priya.sharma@nmims.edu') successfully registered for the newly created event!")
+
+    # 7d. Now reject duplicate email in 2027 for priya.sharma@nmims.edu
+    dup_cross_payload = {
+        'name': 'Priya Sharma Duplicate Attempt',
+        'email': 'priya.sharma@nmims.edu',
+        'phone': '9819876542',
+        'sap_id': '70012023444',
+        'program': 'MBA Tech',
+        'year_of_study': '3rd Year',
+        'branch': 'Data Science'
+    }
+    status, res = request('POST', '/api/register', dup_cross_payload)
+    assert status == 409, f"Expected 409, got {status}: {res}"
+    assert res and 'email' in res.get('errors', {}), f"Expected email error, got: {res}"
+    print("  Test 7d: PASS! Second registration of 'priya.sharma@nmims.edu' for the same event blocked with 409.")
+
+    # 8. Verify Admin View on New Event now has EXACTLY 2 registrations (Test Delegate + Priya Sharma)
     status, res = request('GET', f'/api/admin/registrations?event_code={new_event_code}')
     assert status == 200, f"Failed: {res}"
-    assert res['total'] == 1, f"Expected 1, got {res['total']}"
+    assert res['total'] == 2, f"Expected 2, got {res['total']}"
     assert res['btech_count'] == 1
-    assert res['registrations'][0]['sap_id'] == '70012023777'
-    print(f"  Test 8: PASS! Admin view for '{new_event_code}' shows ONLY the 1 new attendee!")
+    assert res['mbatech_count'] == 1
+    print(f"  Test 8: PASS! Admin view for '{new_event_code}' shows strictly the 2 confirmed attendees!")
 
     # 9. Verify findrome_2026 STILL has its original registrations (No data loss or contamination!)
     status, res = request('GET', '/api/admin/registrations?event_code=findrome_2026')
@@ -122,10 +181,11 @@ def test_multi_event():
     with opener.open(req) as resp:
         content = resp.read().decode('utf-8')
         lines = [line.strip() for line in content.split('\n') if line.strip()]
-        # Header + 1 attendee line = 2 lines
-        assert len(lines) == 2, f"Expected 2 lines in export (header + 1 attendee), got {len(lines)}"
-        assert '70012023777' in lines[1]
-        print(f"  Test 10: PASS! Excel CSV export for '{new_event_code}' contains strictly its 1 attendee.")
+        # Header + 2 attendee lines = 3 lines
+        assert len(lines) == 3, f"Expected 3 lines in export (header + 2 attendees), got {len(lines)}"
+        assert any('70012023777' in line for line in lines)
+        assert any('priya.sharma@nmims.edu' in line for line in lines)
+        print(f"  Test 10: PASS! Excel CSV export for '{new_event_code}' contains strictly its 2 attendees.")
 
     # 11. Switch active event back to findrome_2026
     status, res = request('POST', '/api/admin/switch-event', {'event_code': 'findrome_2026'})

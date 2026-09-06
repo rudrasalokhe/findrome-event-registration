@@ -1373,6 +1373,24 @@ body {
   color: var(--emerald);
 }
 
+.btn-undo-checkin {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-default);
+  color: var(--text-dim);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-undo-checkin:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
+}
+
 /* ── Result Modal Card ── */
 .scan-result-card {
   width: 100%;
@@ -1712,5 +1730,67 @@ body {
     flex-direction: column;
     gap: 12px;
     text-align: center;
+  }
+}
+
+/* ── Print Media: Crisp Physical Pass with Scannable QR ── */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    padding: 0 !important;
+  }
+
+  .top-header-bar,
+  .event-main-card,
+  .app-footer,
+  .modal-overlay:not(#success-modal),
+  .ticket-header,
+  .ticket-actions-row {
+    display: none !important;
+  }
+
+  .modal-overlay#success-modal {
+    position: static !important;
+    background: none !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+
+  .ticket-pass-card {
+    max-width: 100% !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: 2px solid #000000 !important;
+    box-shadow: none !important;
+    padding: 24px !important;
+    transform: none !important;
+    border-radius: 8px !important;
+  }
+
+  .ticket-body-container {
+    background: #ffffff !important;
+    border: 1px solid #777777 !important;
+    color: #000000 !important;
+  }
+
+  .ticket-code-val,
+  .ticket-detail-value,
+  #ticket-venue-display {
+    color: #000000 !important;
+  }
+
+  .pass-status-pill {
+    background: #e5e5e5 !important;
+    color: #000000 !important;
+    border: 1px solid #000000 !important;
+  }
+
+  .qr-code-wrapper {
+    background: #ffffff !important;
+    border: 1px solid #cccccc !important;
+    box-shadow: none !important;
   }
 }
