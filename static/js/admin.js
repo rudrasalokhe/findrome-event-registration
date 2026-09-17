@@ -107,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!list || list.length === 0) {
       tableBody.innerHTML = `
         <tr>
-          <td colspan="10" style="text-align: center; padding: 48px 20px; color: var(--text-muted);">
+          <td colspan="11" style="text-align: center; padding: 48px 20px; color: var(--text-muted);">
             <div style="font-size: 1.05rem; font-weight: 600; color: #fff; margin-bottom: 6px;">
               No registrations found for ${escapeHtml(currentEventName)}
             </div>
@@ -130,6 +130,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ? `<span style="font-size: 0.8rem; color: var(--emerald); font-family: var(--font-mono); font-weight: 600;">Scanned: ${escapeHtml(item.checked_in_at)}</span>`
         : `<span style="font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono);">Reg: ${escapeHtml(item.created_at || item.timestamp || '—')}</span>`;
 
+      const collegeBadge = item.college
+        ? `<span style="display: inline-block; background: rgba(0, 223, 130, 0.08); border: 1px solid rgba(0, 223, 130, 0.25); color: #00df82; padding: 2px 7px; border-radius: 6px; font-size: 0.76rem; font-weight: 600;">${escapeHtml(item.college)}</span>`
+        : `<span style="color: var(--text-dim); font-size: 0.8rem;">—</span>`;
+
       return `
         <tr>
           <td>
@@ -145,6 +149,9 @@ document.addEventListener('DOMContentLoaded', () => {
             <code style="background: rgba(255,255,255,0.05); padding: 3px 8px; border-radius: 6px; font-size: 0.85rem; color: var(--emerald); font-weight: 600; font-family: var(--font-mono);">
               ${escapeHtml(item.sap_id)}
             </code>
+          </td>
+          <td>
+            ${collegeBadge}
           </td>
           <td>
             <span style="color: #f0f4f2; font-weight: 500;">${escapeHtml(item.program)}</span>

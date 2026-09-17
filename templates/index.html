@@ -222,6 +222,34 @@
         </div>
 
         <div class="form-grid-two-col">
+          <!-- College -->
+          <div class="field-group form-grid-full-col" id="group-college">
+            <div class="field-label-wrapper">
+              <label for="college" class="field-label">College <span class="required-star">*</span></label>
+            </div>
+            <div class="input-wrapper">
+              <select id="college" name="college" class="form-input form-select" required>
+                <option value="" disabled selected>Select your NMIMS college / school...</option>
+                <option value="MPSTME">Mukesh Patel School of Technology Management & Engineering (MPSTME / DRMP)</option>
+                <option value="ASMSOC">Anil Surendra Modi School of Commerce (ASMSOC)</option>
+                <option value="Other">Other NMIMS School / Department</option>
+              </select>
+              <div class="select-chevron-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </div>
+            </div>
+            <div class="field-error-msg" id="college-error">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <span>This field is required.</span>
+            </div>
+          </div>
+
           <!-- Program / Degree -->
           <div class="field-group" id="group-program">
             <div class="field-label-wrapper">
@@ -367,6 +395,10 @@
             <span class="ticket-detail-value" id="ticket-sap-display">—</span>
           </div>
           <div class="ticket-detail-item">
+            <span class="ticket-detail-label">College</span>
+            <span class="ticket-detail-value" id="ticket-college-display">—</span>
+          </div>
+          <div class="ticket-detail-item">
             <span class="ticket-detail-label">Program & Year</span>
             <span class="ticket-detail-value" id="ticket-program-display">—</span>
           </div>
@@ -437,6 +469,6 @@
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=2"></script>
 </body>
 </html>

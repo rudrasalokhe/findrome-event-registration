@@ -266,6 +266,10 @@
           <span class="result-row-val" id="res-val-sap">—</span>
         </div>
         <div class="result-row">
+          <span class="result-row-label">College</span>
+          <span class="result-row-val" id="res-val-college">—</span>
+        </div>
+        <div class="result-row">
           <span class="result-row-label">Email</span>
           <span class="result-row-val" id="res-val-email">—</span>
         </div>
@@ -285,7 +289,7 @@
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='js/scanner.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/scanner.js') }}?v=2"></script>
   <script>
     document.getElementById('btn-volunteer-logout').addEventListener('click', async () => {
       await fetch('/api/volunteer/logout', { method: 'POST' });

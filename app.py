@@ -258,6 +258,7 @@ def register():
     email = (data.get('email') or '').strip().lower()
     phone = (data.get('phone') or '').strip()
     sap_id = (data.get('sap_id') or '').strip()
+    college = (data.get('college') or '').strip()
     program = (data.get('program') or '').strip()
     year_of_study = (data.get('year_of_study') or '').strip()
     branch = (data.get('branch') or '').strip()
@@ -287,6 +288,12 @@ def register():
         errors['sap_id'] = 'This field is required.'
     elif not (sap_id.isdigit() and len(sap_id) == 11):
         errors['sap_id'] = 'SAP ID must be exactly 11 digits.'
+
+    # Validation: College
+    if not college:
+        errors['college'] = 'Please select your college.'
+    elif college not in ('MPSTME', 'ASMSOC', 'Other'):
+        errors['college'] = 'Please select a valid college.'
 
     # Validation: Program
     if not program:
@@ -336,6 +343,7 @@ def register():
         'email': email,
         'phone': phone,
         'sap_id': sap_id,
+        'college': college,
         'program': program,
         'year_of_study': year_of_study,
         'branch': branch,
@@ -644,6 +652,7 @@ def admin_registrations():
             {'sap_id': regex_pattern},
             {'email': regex_pattern},
             {'registration_id': regex_pattern},
+            {'college': regex_pattern},
             {'branch': regex_pattern},
             {'program': regex_pattern}
         ]
@@ -995,6 +1004,7 @@ def admin_export_excel():
         'Email Address',
         'Phone Number',
         'SAP ID',
+        'College',
         'Program / Degree',
         'Year of Study',
         'Branch / Specialization',
@@ -1013,6 +1023,7 @@ def admin_export_excel():
             doc.get('email', ''),
             doc.get('phone', ''),
             doc.get('sap_id', ''),
+            doc.get('college', ''),
             doc.get('program', ''),
             doc.get('year_of_study', ''),
             doc.get('branch', ''),

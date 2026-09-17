@@ -31,6 +31,7 @@ def run_tests():
         'email': 'priya.sharma@nmims.edu',
         'phone': '9819876543',
         'sap_id': candidate_sap,
+        'college': 'MPSTME',
         'program': 'MBA Tech',
         'year_of_study': '2nd Year',
         'branch': 'Data Science'
@@ -46,7 +47,8 @@ def run_tests():
         assert resp.status == 201
         res = json.loads(resp.read().decode('utf-8'))
         ticket_id = res['registration_id']
-        print(f"  Test 2: Candidate registered in MongoDB Atlas. Pass ID: {ticket_id}")
+        assert res['data']['college'] == 'MPSTME'
+        print(f"  Test 2: Candidate registered in MongoDB Atlas. Pass ID: {ticket_id}, College: {res['data']['college']}")
     except urllib.error.HTTPError as e:
         if e.code == 409:
             # Already exists in cluster
@@ -65,6 +67,7 @@ def run_tests():
             'email': 'priya.sharma@nmims.edu',
             'phone': '9819876549',
             'sap_id': '70012023999', # Different SAP ID!
+            'college': 'ASMSOC',
             'program': 'B.Tech',
             'year_of_study': '1st Year',
             'branch': 'Cyber Security'
@@ -89,6 +92,7 @@ def run_tests():
             'email': 'PRIYA.SHARMA@NMIMS.EDU',
             'phone': '9819876548',
             'sap_id': '70012023888',
+            'college': 'MPSTME',
             'program': 'B.Tech',
             'year_of_study': '1st Year',
             'branch': 'Cyber Security'
@@ -205,6 +209,7 @@ def run_tests():
     header_line = lines[0]
     assert 'Registration ID' in header_line
     assert 'SAP ID' in header_line
+    assert 'College' in header_line
     assert 'Check-In Status' in header_line
     assert len(lines) >= 2
     print(f"  Test 12: Excel CSV Export generated with {len(lines) - 1} attendee rows + header!")

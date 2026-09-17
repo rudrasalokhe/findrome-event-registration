@@ -15,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const emailInput = document.getElementById('email');
   const phoneInput = document.getElementById('phone');
   const sapInput = document.getElementById('sap_id');
+  const collegeSelect = document.getElementById('college');
   const programSelect = document.getElementById('program');
   const yearSelect = document.getElementById('year_of_study');
   const branchInput = document.getElementById('branch');
@@ -80,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function clearAllErrors() {
-    ['name', 'email', 'phone', 'sap_id', 'program', 'year_of_study', 'branch'].forEach(clearFieldError);
+    ['name', 'email', 'phone', 'sap_id', 'college', 'program', 'year_of_study', 'branch'].forEach(clearFieldError);
     serverAlert.className = 'server-alert';
     serverAlert.style.display = 'none';
   }
@@ -109,6 +110,12 @@ document.addEventListener('DOMContentLoaded', () => {
   emailInput.addEventListener('input', () => {
     if (EMAIL_REGEX.test(emailInput.value.trim())) clearFieldError('email');
   });
+
+  if (collegeSelect) {
+    collegeSelect.addEventListener('change', () => {
+      if (collegeSelect.value) clearFieldError('college');
+    });
+  }
 
   programSelect.addEventListener('change', () => {
     if (programSelect.value) clearFieldError('program');
@@ -173,7 +180,17 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!firstInvalidElement) firstInvalidElement = sapInput;
     }
 
-    // 5. Program / Degree
+    // 5. College / School
+    if (collegeSelect) {
+      const collegeVal = collegeSelect.value;
+      if (!collegeVal) {
+        setFieldError('college', 'Please select your college.');
+        isValid = false;
+        if (!firstInvalidElement) firstInvalidElement = collegeSelect;
+      }
+    }
+
+    // 6. Program / Degree
     const programVal = programSelect.value;
     if (!programVal) {
       setFieldError('program', 'Please select your program / degree.');
@@ -229,6 +246,8 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('ticket-id-display').textContent = record.registration_id;
     document.getElementById('ticket-name-display').textContent = record.name;
     document.getElementById('ticket-sap-display').textContent = record.sap_id;
+    const collegeEl = document.getElementById('ticket-college-display');
+    if (collegeEl) collegeEl.textContent = record.college || '—';
     document.getElementById('ticket-program-display').textContent = `${record.program} • ${record.year_of_study}`;
     document.getElementById('ticket-branch-display').textContent = record.branch;
     const activeDates = record.event_dates || document.getElementById('hero-event-dates-display')?.textContent || 'Event Dates';
@@ -266,6 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
       email: emailInput.value.trim(),
       phone: phoneInput.value.trim(),
       sap_id: sapInput.value.trim(),
+      college: collegeSelect ? collegeSelect.value : '',
       program: programSelect.value,
       year_of_study: yearSelect.value,
       branch: branchInput.value.trim()
@@ -409,7 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="registration-item-card">
           <div class="reg-item-left">
             <span class="reg-item-name">${escapeHtml(r.name)}</span>
-            <span class="reg-item-meta">SAP: ${escapeHtml(r.sap_id)} • ${escapeHtml(r.program)} (${escapeHtml(r.year_of_study)})</span>
+            <span class="reg-item-meta">SAP: ${escapeHtml(r.sap_id)} • ${escapeHtml(r.college || '')} • ${escapeHtml(r.program)} (${escapeHtml(r.year_of_study)})</span>
             <span class="reg-item-meta" style="color: var(--text-dim); font-size: 0.74rem;">${escapeHtml(r.branch)} • Status: ${escapeHtml(r.status || 'CONFIRMED')}</span>
           </div>
           <span class="reg-item-badge">${escapeHtml(r.registration_id)}</span>

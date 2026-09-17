@@ -94,6 +94,7 @@ def test_multi_event():
         'email': 'delegate2027@nmims.edu',
         'phone': '9876543210',
         'sap_id': '70012023777', # Same SAP ID!
+        'college': 'MPSTME',
         'program': 'B.Tech',
         'year_of_study': '3rd Year',
         'branch': 'Computer Science & Engineering (Cyber Security)'
@@ -108,6 +109,7 @@ def test_multi_event():
         'email': 'delegate2027@nmims.edu', # Same email!
         'phone': '9876543219',
         'sap_id': '70012023888', # Different SAP ID
+        'college': 'MPSTME',
         'program': 'B.Tech',
         'year_of_study': '2nd Year',
         'branch': 'Information Technology'
@@ -123,6 +125,7 @@ def test_multi_event():
         'email': 'DELEGATE2027@NMIMS.EDU', # Uppercase same email
         'phone': '9876543218',
         'sap_id': '70012023999',
+        'college': 'MPSTME',
         'program': 'MBA Tech',
         'year_of_study': '1st Year',
         'branch': 'Computer Engineering'
@@ -138,6 +141,7 @@ def test_multi_event():
         'email': 'priya.sharma@nmims.edu', # Registered in 2026, registering for new event 2027!
         'phone': '9819876543',
         'sap_id': '70012023555',
+        'college': 'ASMSOC',
         'program': 'MBA Tech',
         'year_of_study': '3rd Year',
         'branch': 'Data Science'
@@ -152,6 +156,7 @@ def test_multi_event():
         'email': 'priya.sharma@nmims.edu',
         'phone': '9819876542',
         'sap_id': '70012023444',
+        'college': 'ASMSOC',
         'program': 'MBA Tech',
         'year_of_study': '3rd Year',
         'branch': 'Data Science'
