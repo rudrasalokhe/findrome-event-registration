@@ -17,6 +17,11 @@ load_dotenv(os.path.join(os.path.dirname(__file__), 'atlas-credentials.env'))
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'findrome_nmims_secret_key_2026')
 
+
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'ok'}), 200
+
 # Security credentials
 VOLUNTEER_PIN = os.getenv('VOLUNTEER_PIN', '2026')
 ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin')
