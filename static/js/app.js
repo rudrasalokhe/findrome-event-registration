@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const programSelect = document.getElementById('program');
   const yearSelect = document.getElementById('year_of_study');
   const branchInput = document.getElementById('branch');
+  const slotSelect = document.getElementById('slot');
 
   // Counters
   const phoneCounter = document.getElementById('phone-counter');
@@ -81,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function clearAllErrors() {
-    ['name', 'email', 'phone', 'sap_id', 'college', 'program', 'year_of_study', 'branch'].forEach(clearFieldError);
+    ['name', 'email', 'phone', 'sap_id', 'college', 'program', 'year_of_study', 'branch', 'slot'].forEach(clearFieldError);
     serverAlert.className = 'server-alert';
     serverAlert.style.display = 'none';
   }
@@ -127,6 +128,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   branchInput.addEventListener('input', () => {
     if (branchInput.value.trim().length > 0) clearFieldError('branch');
+  });
+
+  slotSelect.addEventListener('change', () => {
+    if (slotSelect.value) clearFieldError('slot');
   });
 
   // ── Client-Side Validation Logic ──
@@ -214,6 +219,14 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!firstInvalidElement) firstInvalidElement = branchInput;
     }
 
+    // 8. Event Slot
+    const slotVal = slotSelect.value;
+    if (!slotVal) {
+      setFieldError('slot', 'Please select an event slot.');
+      isValid = false;
+      if (!firstInvalidElement) firstInvalidElement = slotSelect;
+    }
+
     if (firstInvalidElement) {
       firstInvalidElement.focus();
       firstInvalidElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -250,6 +263,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (collegeEl) collegeEl.textContent = record.college || '—';
     document.getElementById('ticket-program-display').textContent = `${record.program} • ${record.year_of_study}`;
     document.getElementById('ticket-branch-display').textContent = record.branch;
+    const slotEl = document.getElementById('ticket-slot-display');
+    if (slotEl) slotEl.textContent = record.slot || '—';
     const activeDates = record.event_dates || document.getElementById('hero-event-dates-display')?.textContent || 'Event Dates';
     const activeVenue = record.event_venue || document.getElementById('hero-event-venue-display')?.textContent || 'NMIMS Campus';
     const timeEl = document.getElementById('ticket-time-display');
@@ -288,7 +303,8 @@ document.addEventListener('DOMContentLoaded', () => {
       college: collegeSelect ? collegeSelect.value : '',
       program: programSelect.value,
       year_of_study: yearSelect.value,
-      branch: branchInput.value.trim()
+      branch: branchInput.value.trim(),
+      slot: slotSelect.value
     };
 
     submitBtn.disabled = true;

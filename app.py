@@ -267,6 +267,7 @@ def register():
     program = (data.get('program') or '').strip()
     year_of_study = (data.get('year_of_study') or '').strip()
     branch = (data.get('branch') or '').strip()
+    slot = (data.get('slot') or '').strip()
 
     errors = {}
 
@@ -312,6 +313,13 @@ def register():
     if not branch:
         errors['branch'] = 'This field is required.'
 
+    # Validation: Slot
+    valid_slots = ['28th | 2:00 PM \u2013 4:00 PM', '29th | 10:00 AM \u2013 12:00 PM']
+    if not slot:
+        errors['slot'] = 'Please select an event slot.'
+    elif slot not in valid_slots:
+        errors['slot'] = 'Please select a valid event slot.'
+
     if errors:
         return jsonify({'success': False, 'errors': errors}), 400
 
@@ -352,6 +360,7 @@ def register():
         'program': program,
         'year_of_study': year_of_study,
         'branch': branch,
+        'slot': slot,
         'event_code': cfg.get('event_code', 'findrome_2026'),
         'event_name': cfg.get('event_name', 'Findrome'),
         'event_edition': cfg.get('event_edition', '2026'),
@@ -1013,6 +1022,7 @@ def admin_export_excel():
         'Program / Degree',
         'Year of Study',
         'Branch / Specialization',
+        'Event Slot',
         'Check-In Status',
         'Admitted / Check-In Timestamp',
         'Registered At',
@@ -1032,6 +1042,7 @@ def admin_export_excel():
             doc.get('program', ''),
             doc.get('year_of_study', ''),
             doc.get('branch', ''),
+            doc.get('slot', ''),
             doc.get('status', 'CONFIRMED'),
             doc.get('checked_in_at', '') or '—',
             doc.get('timestamp', '') or doc.get('created_at', ''),

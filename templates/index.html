@@ -340,6 +340,46 @@
         </div>
       </section>
 
+      <!-- Section 3: Event Slot Selection -->
+      <section class="form-section-container" aria-labelledby="section-03-heading">
+        <div class="section-header">
+          <div class="section-title-wrap">
+            <span class="section-tag-mark"></span>
+            <h2 id="section-03-heading" class="section-title">Event Slot</h2>
+          </div>
+          <span class="section-tag-sub">Choose Your Preferred Day & Time</span>
+        </div>
+
+        <div class="form-grid-two-col">
+          <!-- Slot Selection -->
+          <div class="field-group form-grid-full-col" id="group-slot">
+            <div class="field-label-wrapper">
+              <label for="slot" class="field-label">Preferred Slot <span class="required-star">*</span></label>
+            </div>
+            <div class="input-wrapper">
+              <select id="slot" name="slot" class="form-input form-select" required>
+                <option value="" disabled selected>Select your preferred event slot...</option>
+                <option value="28th | 2:00 PM – 4:00 PM">📅 28th — 2:00 PM to 4:00 PM</option>
+                <option value="29th | 10:00 AM – 12:00 PM">📅 29th — 10:00 AM to 12:00 PM</option>
+              </select>
+              <div class="select-chevron-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </div>
+            </div>
+            <div class="field-error-msg" id="slot-error">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              <span>Please select an event slot.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- Confirmation Notice & Primary Submit Action -->
       <div class="submission-container">
         <div class="confirmation-note">
@@ -406,6 +446,10 @@
             <span class="ticket-detail-label">Branch</span>
             <span class="ticket-detail-value" id="ticket-branch-display">—</span>
           </div>
+          <div class="ticket-detail-item">
+            <span class="ticket-detail-label">Event Slot</span>
+            <span class="ticket-detail-value" id="ticket-slot-display" style="color: var(--emerald); font-weight: 600;">—</span>
+          </div>
         </div>
 
         <!-- QR Code Verification Section -->
@@ -469,6 +513,6 @@
     </div>
   </div>
 
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=2"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=3"></script>
 </body>
 </html>
