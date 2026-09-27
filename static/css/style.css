@@ -1861,3 +1861,29 @@ body {
     box-shadow: none !important;
   }
 }
+
+/* ── Event Reminder Modal & Email Preview Enhancements ── */
+#send-reminder-modal .drawer-modal {
+  max-width: 560px;
+}
+
+#email-preview-container {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 223, 130, 0.4) transparent;
+}
+
+#email-preview-container::-webkit-scrollbar {
+  width: 5px;
+}
+
+#email-preview-container::-webkit-scrollbar-thumb {
+  background: rgba(0, 223, 130, 0.3);
+  border-radius: 4px;
+}
+
+.btn-admin-row-remind:hover {
+  background: rgba(0, 223, 130, 0.12) !important;
+  border-color: rgba(0, 223, 130, 0.4) !important;
+  color: var(--emerald) !important;
+}
+

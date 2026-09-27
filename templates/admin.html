@@ -116,9 +116,18 @@
         <span>Event Schedule</span>
       </button>
 
+      <!-- Send Reminder Email Button -->
+      <button type="button" class="btn-emerald-primary header-btn" id="btn-open-send-reminder" title="Send email reminder to registered event attendees">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+          <polyline points="22,6 12,13 2,6"></polyline>
+        </svg>
+        <span>Send Reminder</span>
+      </button>
+
       <!-- Direct Download Excel Button with Glowing Emerald Highlight -->
-      <a href="/admin/export" class="btn-emerald-primary header-btn" title="Download complete registrations spreadsheet">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="15" height="15">
+      <a href="/admin/export" class="nav-action-btn" title="Download complete registrations spreadsheet">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" style="color: var(--emerald);">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
           <polyline points="7 10 12 15 17 10"></polyline>
           <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -470,10 +479,138 @@
     </div>
   </div>
 
+  <!-- Modal: Send Reminder Emails -->
+  <div class="modal-overlay" id="send-reminder-modal" role="dialog" aria-modal="true" aria-labelledby="reminder-modal-title">
+    <div class="ticket-pass-card drawer-modal" style="max-width: 560px;">
+      <div class="drawer-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 32px; height: 32px; border-radius: 8px; background: rgba(0, 223, 130, 0.12); display: flex; align-items: center; justify-content: center; color: var(--emerald); flex-shrink: 0;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+              <polyline points="22,6 12,13 2,6"></polyline>
+            </svg>
+          </div>
+          <div>
+            <h3 id="reminder-modal-title" class="drawer-title">Send Event Reminder</h3>
+            <p style="font-size: 0.78rem; color: var(--text-muted);">Email entry passes, dates, venue & checklist to registered attendees</p>
+          </div>
+        </div>
+        <button type="button" class="drawer-close-btn" id="btn-close-reminder-modal" aria-label="Close modal">✕</button>
+      </div>
+
+      <!-- Delivery Mode Status Strip -->
+      <div id="smtp-status-indicator" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: 6px; margin-bottom: 14px; font-size: 0.78rem;">
+        <span style="color: var(--text-secondary); display: flex; align-items: center; gap: 6px;">
+          <span class="pulse-dot" style="width: 6px; height: 6px;"></span>
+          <span id="smtp-status-text">Checking Mail Server...</span>
+        </span>
+        <button type="button" id="btn-send-admin-test-email" class="btn-secondary-dark btn-sm" style="font-size: 0.72rem; padding: 2px 8px;" title="Send a single test reminder to your email">
+          Send Test to Me
+        </button>
+      </div>
+
+      <form id="send-reminder-form" style="display: flex; flex-direction: column; gap: 14px;">
+        <!-- Target Selector -->
+        <div class="field-group">
+          <label class="field-label">Recipient Group</label>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;" id="reminder-target-options">
+            <label id="target-label-all" style="display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: rgba(0, 223, 130, 0.08); border: 1px solid rgba(0, 223, 130, 0.35); border-radius: 6px; cursor: pointer; font-size: 0.82rem; color: #fff;">
+              <input type="radio" name="reminder-target" value="all" checked style="accent-color: var(--emerald);">
+              <div>
+                <div style="font-weight: 600;">All Registered</div>
+                <div style="font-size: 0.72rem; color: var(--emerald);" id="reminder-count-all-badge">0 attendees</div>
+              </div>
+            </label>
+            <label id="target-label-pending" style="display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-default); border-radius: 6px; cursor: pointer; font-size: 0.82rem; color: #fff;">
+              <input type="radio" name="reminder-target" value="pending" style="accent-color: var(--emerald);">
+              <div>
+                <div style="font-weight: 600;">Pending Check-In</div>
+                <div style="font-size: 0.72rem; color: #fbbf24;" id="reminder-count-pending-badge">0 attendees</div>
+              </div>
+            </label>
+          </div>
+
+          <!-- Specific Single Attendee Target Container (shown when opened for 1 person) -->
+          <div id="reminder-single-attendee-card" style="display: none; padding: 10px 12px; background: rgba(0, 223, 130, 0.08); border: 1px solid rgba(0, 223, 130, 0.25); border-radius: 6px; margin-top: 6px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="font-size: 0.82rem; font-weight: 600; color: #fff;" id="reminder-single-name">Candidate Name</div>
+                <div style="font-size: 0.74rem; color: var(--text-secondary);" id="reminder-single-meta">Pass: FD-1234 • email@example.com</div>
+              </div>
+              <button type="button" class="btn-secondary-dark btn-sm" id="btn-reminder-switch-to-all" style="font-size: 0.7rem; padding: 3px 8px;">
+                Switch to All
+              </button>
+            </div>
+            <input type="hidden" id="reminder-single-reg-id" value="">
+          </div>
+        </div>
+
+        <!-- Subject Line -->
+        <div class="field-group">
+          <label class="field-label" for="reminder-subject-input">Email Subject Line</label>
+          <input 
+            type="text" 
+            id="reminder-subject-input" 
+            class="form-input" 
+            placeholder="e.g. ⏰ Event Reminder: Findrome 2026 is coming up!"
+            required
+          >
+        </div>
+
+        <!-- Optional Custom Announcement / Message -->
+        <div class="field-group">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+            <label class="field-label" for="reminder-custom-message" style="margin-bottom: 0;">Special Announcement / Note (Optional)</label>
+            <span style="font-size: 0.72rem; color: var(--text-dim);">Shows as highlight banner in email</span>
+          </div>
+          <textarea 
+            id="reminder-custom-message" 
+            class="form-input" 
+            rows="3" 
+            placeholder="e.g. Auditorium gates open promptly at 9:30 AM. Delegate kits and badges will be distributed at desk A."
+            style="resize: vertical; font-family: inherit; font-size: 0.82rem; line-height: 1.45;"
+          ></textarea>
+        </div>
+
+        <!-- Live Email Preview Toggle -->
+        <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px 12px;">
+          <button type="button" id="btn-toggle-email-preview" style="background: none; border: none; color: var(--emerald); font-size: 0.78rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; width: 100%; justify-content: space-between; padding: 2px 0;">
+            <span style="display: flex; align-items: center; gap: 6px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+              <span>Preview Branded Email Template</span>
+            </span>
+            <span id="preview-toggle-icon">▼</span>
+          </button>
+          <div id="email-preview-container" style="display: none; margin-top: 10px; max-height: 220px; overflow-y: auto; background: #070c09; border: 1px solid var(--border-subtle); border-radius: 6px; padding: 12px; font-size: 0.76rem; color: #c0d1c7; line-height: 1.5;">
+            <!-- Rendered preview filled dynamically by JS -->
+          </div>
+        </div>
+
+        <!-- Status / Alert Box -->
+        <div id="reminder-status-alert" style="display: none; padding: 10px 12px; border-radius: 6px; font-size: 0.82rem;"></div>
+
+        <!-- Modal Actions -->
+        <div style="display: flex; gap: 10px; margin-top: 4px;">
+          <button type="button" class="btn-secondary-dark" id="btn-cancel-reminder" style="flex: 1;">Cancel</button>
+          <button type="submit" class="btn-emerald-primary" id="btn-submit-send-reminder" style="flex: 2;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+            <span id="btn-submit-send-reminder-text">Send Reminder Emails</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
     window.INITIAL_ACTIVE_EVENT = "{{ active_event_code }}";
   </script>
-  <script src="{{ url_for('static', filename='js/admin.js') }}?v=2"></script>
+  <script src="{{ url_for('static', filename='js/admin.js') }}?v=4"></script>
   <script>
     document.getElementById('btn-admin-logout').addEventListener('click', async () => {
       await fetch('/api/admin/logout', { method: 'POST' });

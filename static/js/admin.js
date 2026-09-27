@@ -78,6 +78,12 @@ document.addEventListener('DOMContentLoaded', () => {
       if (countTabBtech) countTabBtech.textContent = btech;
       if (countTabMbatech) countTabMbatech.textContent = mbatech;
 
+      // Update Reminder Modal badge counts
+      const reminderCountAllBadge = document.getElementById('reminder-count-all-badge');
+      const reminderCountPendingBadge = document.getElementById('reminder-count-pending-badge');
+      if (reminderCountAllBadge) reminderCountAllBadge.textContent = `${total} attendee${total === 1 ? '' : 's'}`;
+      if (reminderCountPendingBadge) reminderCountPendingBadge.textContent = `${pending} attendee${pending === 1 ? '' : 's'}`;
+
       // Update header info
       if (adminHeroYear) adminHeroYear.textContent = currentEventName.toUpperCase();
       if (adminEventNameDisplay) adminEventNameDisplay.textContent = currentEventName;
@@ -163,6 +169,12 @@ document.addEventListener('DOMContentLoaded', () => {
             <a href="mailto:${escapeHtml(item.email)}" style="font-size: 0.84rem; color: #b4c2ba; text-decoration: none;">
               ${escapeHtml(item.email)}
             </a>
+            ${item.reminder_sent_at ? `
+              <div style="font-size: 0.72rem; color: var(--emerald); margin-top: 3px; display: flex; align-items: center; gap: 4px;" title="Reminder sent: ${escapeHtml(item.reminder_sent_at)}">
+                <span>✉️</span>
+                <span>Sent (${item.reminder_count || 1}x)</span>
+              </div>
+            ` : ''}
           </td>
           <td>
             <span style="font-size: 0.84rem; color: var(--text-dim); font-family: var(--font-mono);">
@@ -172,10 +184,15 @@ document.addEventListener('DOMContentLoaded', () => {
           <td>
             ${timeDisplay}
           </td>
-          <td style="text-align: right;">
-            <button type="button" class="btn-secondary-dark btn-sm btn-admin-toggle-checkin" data-reg-id="${escapeHtml(item.registration_id)}" title="Toggle check-in status" style="padding: 4px 10px; font-size: 0.74rem;">
-              ${isCheckedIn ? 'Undo Check-In' : 'Mark Scanned'}
-            </button>
+          <td style="text-align: right; white-space: nowrap;">
+            <div style="display: inline-flex; gap: 6px;">
+              <button type="button" class="btn-secondary-dark btn-sm btn-admin-row-remind" data-reg-id="${escapeHtml(item.registration_id)}" data-name="${escapeHtml(item.name)}" data-email="${escapeHtml(item.email)}" title="Send reminder email to ${escapeHtml(item.name)}" style="padding: 4px 8px; font-size: 0.74rem;">
+                ✉️ Remind
+              </button>
+              <button type="button" class="btn-secondary-dark btn-sm btn-admin-toggle-checkin" data-reg-id="${escapeHtml(item.registration_id)}" title="Toggle check-in status" style="padding: 4px 10px; font-size: 0.74rem;">
+                ${isCheckedIn ? 'Undo Check-In' : 'Mark Scanned'}
+              </button>
+            </div>
           </td>
         </tr>
       `;
@@ -204,6 +221,16 @@ document.addEventListener('DOMContentLoaded', () => {
           alert('Network error.');
           btn.disabled = false;
         }
+      });
+    });
+
+    // Attach row reminder listeners
+    tableBody.querySelectorAll('.btn-admin-row-remind').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const regId = e.currentTarget.getAttribute('data-reg-id');
+        const name = e.currentTarget.getAttribute('data-name');
+        const email = e.currentTarget.getAttribute('data-email');
+        openReminderModalForSingle(regId, name, email);
       });
     });
   }
@@ -707,6 +734,338 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       });
     }
+  }
+
+  // ── Send Reminder Modal Controller ──
+  const sendReminderModal = document.getElementById('send-reminder-modal');
+  const btnOpenSendReminder = document.getElementById('btn-open-send-reminder');
+  const btnCloseReminderModal = document.getElementById('btn-close-reminder-modal');
+  const btnCancelReminder = document.getElementById('btn-cancel-reminder');
+  const sendReminderForm = document.getElementById('send-reminder-form');
+  const reminderSubjectInput = document.getElementById('reminder-subject-input');
+  const reminderCustomMessage = document.getElementById('reminder-custom-message');
+  const reminderStatusAlert = document.getElementById('reminder-status-alert');
+  const btnSubmitSendReminder = document.getElementById('btn-submit-send-reminder');
+  const btnSubmitSendReminderText = document.getElementById('btn-submit-send-reminder-text');
+  const smtpStatusText = document.getElementById('smtp-status-text');
+  const btnSendAdminTestEmail = document.getElementById('btn-send-admin-test-email');
+
+  const reminderTargetOptions = document.getElementById('reminder-target-options');
+  const targetLabelAll = document.getElementById('target-label-all');
+  const targetLabelPending = document.getElementById('target-label-pending');
+  const reminderSingleAttendeeCard = document.getElementById('reminder-single-attendee-card');
+  const reminderSingleName = document.getElementById('reminder-single-name');
+  const reminderSingleMeta = document.getElementById('reminder-single-meta');
+  const reminderSingleRegId = document.getElementById('reminder-single-reg-id');
+  const btnReminderSwitchToAll = document.getElementById('btn-reminder-switch-to-all');
+
+  const btnToggleEmailPreview = document.getElementById('btn-toggle-email-preview');
+  const emailPreviewContainer = document.getElementById('email-preview-container');
+  const previewToggleIcon = document.getElementById('preview-toggle-icon');
+
+  function updateTargetRadioStyles() {
+    const checked = document.querySelector('input[name="reminder-target"]:checked');
+    if (!checked) return;
+    if (checked.value === 'all') {
+      if (targetLabelAll) {
+        targetLabelAll.style.background = 'rgba(0, 223, 130, 0.08)';
+        targetLabelAll.style.borderColor = 'rgba(0, 223, 130, 0.35)';
+      }
+      if (targetLabelPending) {
+        targetLabelPending.style.background = 'rgba(255, 255, 255, 0.02)';
+        targetLabelPending.style.borderColor = 'var(--border-default)';
+      }
+    } else {
+      if (targetLabelPending) {
+        targetLabelPending.style.background = 'rgba(251, 191, 36, 0.08)';
+        targetLabelPending.style.borderColor = 'rgba(251, 191, 36, 0.35)';
+      }
+      if (targetLabelAll) {
+        targetLabelAll.style.background = 'rgba(255, 255, 255, 0.02)';
+        targetLabelAll.style.borderColor = 'var(--border-default)';
+      }
+    }
+  }
+
+  document.querySelectorAll('input[name="reminder-target"]').forEach(r => {
+    r.addEventListener('change', updateTargetRadioStyles);
+  });
+
+  async function checkSmtpStatus() {
+    try {
+      const res = await fetch('/api/admin/smtp-status');
+      const data = await res.json();
+      if (res.ok && data.success) {
+        if (data.is_configured) {
+          if (smtpStatusText) {
+            smtpStatusText.innerHTML = `<span style="color: #00df82; font-weight: 600;">● SMTP Active</span> (${escapeHtml(data.server)}:${data.port}) — Real Emails`;
+          }
+        } else {
+          if (smtpStatusText) {
+            smtpStatusText.innerHTML = `<span style="color: #fbbf24; font-weight: 600;">● Simulated Test Mode</span> (Add SMTP to .env for live emails)`;
+          }
+        }
+      }
+    } catch (e) {
+      if (smtpStatusText) smtpStatusText.textContent = 'Mail server status unavailable';
+    }
+  }
+
+  function renderEmailPreview() {
+    if (!emailPreviewContainer) return;
+    const subj = (reminderSubjectInput && reminderSubjectInput.value.trim()) || `⏰ Event Reminder: ${currentEventName} is coming up!`;
+    const customMsg = (reminderCustomMessage && reminderCustomMessage.value.trim()) || '';
+    const dates = (adminHeaderDates && adminHeaderDates.textContent) || 'September 28 – 29, 2026';
+
+    emailPreviewContainer.innerHTML = `
+      <div style="border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px; margin-bottom: 8px;">
+        <span style="color: var(--text-dim);">Subject:</span>
+        <strong style="color: #fff; margin-left: 4px;">${escapeHtml(subj)}</strong>
+      </div>
+      <div style="background: rgba(0, 223, 130, 0.1); border-left: 3px solid #00df82; padding: 6px 10px; margin-bottom: 8px; border-radius: 3px;">
+        <strong style="color: var(--emerald);">⏰ EVENT REMINDER NOTICE: ${escapeHtml(currentEventName)}</strong> • ${escapeHtml(dates)}
+      </div>
+      <div style="margin-bottom: 6px;">Hello <span style="color: #fff; font-weight: 600;">Candidate Name</span>,</div>
+      <div style="color: #a4b8ad; margin-bottom: 8px;">This is a reminder that you are registered for ${escapeHtml(currentEventName)}. Here is a reminder of your event details:</div>
+      ${customMsg ? `<div style="background: rgba(0, 223, 130, 0.06); border-left: 2px solid var(--emerald); padding: 6px 8px; margin-bottom: 8px; color: #d6f5e6;">📢 ${escapeHtml(customMsg)}</div>` : ''}
+      <div style="background: #111a15; border: 1px dashed rgba(0,223,130,0.3); padding: 8px; border-radius: 4px; font-family: monospace; font-size: 0.72rem; color: #fff;">
+        <div style="color: var(--emerald); font-weight: 700;">YOUR REGISTERED PASS: FD-SAMPLE-2026</div>
+        <div>Dates: ${escapeHtml(dates)}</div>
+        <div>Checklist: Carry college ID, for Monday reach by 1:30 PM near registration desk</div>
+      </div>
+    `;
+  }
+
+  function openReminderModal() {
+    if (reminderStatusAlert) reminderStatusAlert.style.display = 'none';
+    if (reminderSubjectInput) {
+      reminderSubjectInput.value = `⏰ Event Reminder: ${currentEventName} is coming up!`;
+    }
+    if (reminderSingleAttendeeCard) reminderSingleAttendeeCard.style.display = 'none';
+    if (reminderTargetOptions) reminderTargetOptions.style.display = 'grid';
+    if (reminderSingleRegId) reminderSingleRegId.value = '';
+    
+    // Default to 'all'
+    const allRadio = document.querySelector('input[name="reminder-target"][value="all"]');
+    if (allRadio) allRadio.checked = true;
+    updateTargetRadioStyles();
+
+    checkSmtpStatus();
+    renderEmailPreview();
+    if (sendReminderModal) sendReminderModal.classList.add('active');
+  }
+
+  function openReminderModalForSingle(regId, name, email) {
+    if (reminderStatusAlert) reminderStatusAlert.style.display = 'none';
+    if (reminderSubjectInput) {
+      reminderSubjectInput.value = `⏰ Event Reminder: ${currentEventName} is coming up!`;
+    }
+    if (reminderSingleRegId) reminderSingleRegId.value = regId;
+    if (reminderSingleName) reminderSingleName.textContent = name || 'Attendee';
+    if (reminderSingleMeta) reminderSingleMeta.textContent = `Pass ID: ${regId} • ${email || 'No email'}`;
+    
+    if (reminderSingleAttendeeCard) reminderSingleAttendeeCard.style.display = 'block';
+    if (reminderTargetOptions) reminderTargetOptions.style.display = 'none';
+
+    checkSmtpStatus();
+    renderEmailPreview();
+    if (sendReminderModal) sendReminderModal.classList.add('active');
+  }
+
+  const closeReminderModal = () => {
+    if (sendReminderModal) sendReminderModal.classList.remove('active');
+  };
+
+  if (btnOpenSendReminder) btnOpenSendReminder.addEventListener('click', openReminderModal);
+  if (btnCloseReminderModal) btnCloseReminderModal.addEventListener('click', closeReminderModal);
+  if (btnCancelReminder) btnCancelReminder.addEventListener('click', closeReminderModal);
+
+  if (sendReminderModal) {
+    sendReminderModal.addEventListener('click', (e) => {
+      if (e.target === sendReminderModal) closeReminderModal();
+    });
+  }
+
+  if (btnReminderSwitchToAll) {
+    btnReminderSwitchToAll.addEventListener('click', () => {
+      if (reminderSingleAttendeeCard) reminderSingleAttendeeCard.style.display = 'none';
+      if (reminderTargetOptions) reminderTargetOptions.style.display = 'grid';
+      if (reminderSingleRegId) reminderSingleRegId.value = '';
+    });
+  }
+
+  if (btnToggleEmailPreview && emailPreviewContainer) {
+    btnToggleEmailPreview.addEventListener('click', () => {
+      const isVisible = (emailPreviewContainer.style.display !== 'none');
+      emailPreviewContainer.style.display = isVisible ? 'none' : 'block';
+      if (previewToggleIcon) previewToggleIcon.textContent = isVisible ? '▼' : '▲';
+      if (!isVisible) renderEmailPreview();
+    });
+  }
+
+  if (reminderSubjectInput) reminderSubjectInput.addEventListener('input', renderEmailPreview);
+  if (reminderCustomMessage) reminderCustomMessage.addEventListener('input', renderEmailPreview);
+
+  // Test Email to Admin Button
+  if (btnSendAdminTestEmail) {
+    btnSendAdminTestEmail.addEventListener('click', async () => {
+      const testEmail = prompt('Enter your email address to receive a sample reminder email:', '');
+      if (!testEmail || !testEmail.trim()) return;
+
+      btnSendAdminTestEmail.disabled = true;
+      btnSendAdminTestEmail.textContent = 'Sending...';
+
+      try {
+        const res = await fetch('/api/admin/send-reminder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event_code: selectedEventCode,
+            test_email: testEmail.trim(),
+            subject: (reminderSubjectInput && reminderSubjectInput.value.trim()) || `Reminder: ${currentEventName}`,
+            custom_message: (reminderCustomMessage && reminderCustomMessage.value.trim()) || ''
+          })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          alert(`✓ ${data.message}`);
+        } else {
+          alert(`Error: ${data.message || 'Failed to dispatch test email.'}`);
+        }
+      } catch (err) {
+        alert('Network error attempting test dispatch.');
+      } finally {
+        btnSendAdminTestEmail.disabled = false;
+        btnSendAdminTestEmail.textContent = 'Send Test to Me';
+      }
+    });
+  }
+
+  // Form submit: send reminders
+  if (sendReminderForm) {
+    sendReminderForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      btnSubmitSendReminder.disabled = true;
+      btnSubmitSendReminderText.textContent = 'Dispatching Emails...';
+      if (reminderStatusAlert) reminderStatusAlert.style.display = 'none';
+
+      let target = 'all';
+      let singleRegId = '';
+
+      if (reminderSingleRegId && reminderSingleRegId.value) {
+        target = 'single';
+        singleRegId = reminderSingleRegId.value;
+      } else {
+        const checkedRadio = document.querySelector('input[name="reminder-target"]:checked');
+        if (checkedRadio) target = checkedRadio.value;
+      }
+
+      const payload = {
+        event_code: selectedEventCode,
+        target: target,
+        registration_id: singleRegId,
+        subject: (reminderSubjectInput && reminderSubjectInput.value.trim()) || '',
+        custom_message: (reminderCustomMessage && reminderCustomMessage.value.trim()) || ''
+      };
+
+      try {
+        const res = await fetch('/api/admin/send-reminder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+          if (data.async && data.job_id) {
+            // Live background progress polling for 200+ attendees
+            reminderStatusAlert.style.display = 'block';
+            reminderStatusAlert.style.background = 'rgba(0, 223, 130, 0.08)';
+            reminderStatusAlert.style.border = '1px solid rgba(0, 223, 130, 0.3)';
+            reminderStatusAlert.style.color = '#d6f5e6';
+            reminderStatusAlert.innerHTML = `
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                <strong>🔄 Sending in background...</strong>
+                <span id="rem-progress-pct" style="font-weight: 700; color: var(--emerald);">0%</span>
+              </div>
+              <div style="background: rgba(255,255,255,0.06); height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 6px;">
+                <div id="rem-progress-bar" style="background: var(--emerald); width: 0%; height: 100%; transition: width 0.3s ease;"></div>
+              </div>
+              <div style="font-size: 0.74rem; color: var(--text-dim);" id="rem-progress-text">
+                Sent 0 / ${data.total_target} emails... You can close this modal or wait.
+              </div>
+            `;
+
+            const pollInterval = setInterval(async () => {
+              try {
+                const jRes = await fetch(`/api/admin/reminder-job/${data.job_id}`);
+                const jData = await jRes.json();
+                if (jRes.ok && jData.success && jData.job) {
+                  const job = jData.job;
+                  const total = job.total_target || 1;
+                  const done = (job.sent_count || 0) + (job.failed_count || 0);
+                  const pct = Math.min(100, Math.round((done / total) * 100));
+
+                  const bar = document.getElementById('rem-progress-bar');
+                  const pctText = document.getElementById('rem-progress-pct');
+                  const desc = document.getElementById('rem-progress-text');
+                  if (bar) bar.style.width = `${pct}%`;
+                  if (pctText) pctText.textContent = `${pct}%`;
+                  if (desc) desc.textContent = `Sent ${job.sent_count} / ${total} emails (${job.failed_count} failed)...`;
+
+                  if (job.status === 'completed') {
+                    clearInterval(pollInterval);
+                    reminderStatusAlert.style.background = 'rgba(0, 223, 130, 0.15)';
+                    reminderStatusAlert.innerHTML = `<strong>✓ Complete:</strong> Dispatched ${job.sent_count} reminder emails to attendees!`;
+                    loadAdminData();
+                    setTimeout(() => {
+                      closeReminderModal();
+                      btnSubmitSendReminder.disabled = false;
+                      btnSubmitSendReminderText.textContent = 'Send Reminder Emails';
+                    }, 2200);
+                  }
+                }
+              } catch (e) {
+                // network blip during polling, will retry next tick
+              }
+            }, 1200);
+
+            return;
+          }
+
+          reminderStatusAlert.style.display = 'block';
+          reminderStatusAlert.style.background = 'rgba(0, 223, 130, 0.1)';
+          reminderStatusAlert.style.border = '1px solid rgba(0, 223, 130, 0.3)';
+          reminderStatusAlert.style.color = '#00df82';
+          reminderStatusAlert.innerHTML = `<strong>✓ Success:</strong> ${escapeHtml(data.message)}`;
+
+          // Refresh admin data so updated reminder timestamps appear immediately!
+          loadAdminData();
+
+          setTimeout(() => {
+            closeReminderModal();
+            btnSubmitSendReminder.disabled = false;
+            btnSubmitSendReminderText.textContent = 'Send Reminder Emails';
+          }, 1800);
+        } else {
+          reminderStatusAlert.style.display = 'block';
+          reminderStatusAlert.style.background = 'rgba(255, 82, 82, 0.1)';
+          reminderStatusAlert.style.border = '1px solid rgba(255, 82, 82, 0.3)';
+          reminderStatusAlert.style.color = '#ff8080';
+          reminderStatusAlert.textContent = data.message || 'Failed to dispatch reminder emails.';
+          btnSubmitSendReminder.disabled = false;
+          btnSubmitSendReminderText.textContent = 'Send Reminder Emails';
+        }
+      } catch (err) {
+        reminderStatusAlert.style.display = 'block';
+        reminderStatusAlert.style.background = 'rgba(255, 82, 82, 0.1)';
+        reminderStatusAlert.style.border = '1px solid rgba(255, 82, 82, 0.3)';
+        reminderStatusAlert.style.color = '#ff8080';
+        reminderStatusAlert.textContent = 'Network error during reminder dispatch.';
+        btnSubmitSendReminder.disabled = false;
+        btnSubmitSendReminderText.textContent = 'Send Reminder Emails';
+      }
+    });
   }
 
   // Initial load

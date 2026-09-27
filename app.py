@@ -4,7 +4,13 @@ import csv
 import io
 import random
 import time
+import threading
+import uuid
 from datetime import datetime, timezone
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.utils import formataddr
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify, session, Response, redirect, url_for
 from pymongo import MongoClient, ASCENDING
@@ -16,6 +22,21 @@ load_dotenv(os.path.join(os.path.dirname(__file__), 'atlas-credentials.env'))
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'findrome_nmims_secret_key_2026')
+
+# SMTP Email Configuration for Event Reminders
+SMTP_USERNAME = os.getenv('SMTP_USERNAME') or os.getenv('SMTP_EMAIL')
+SMTP_SERVER = os.getenv('SMTP_SERVER') or ('smtp.gmail.com' if (SMTP_USERNAME and '@gmail.com' in SMTP_USERNAME.lower()) else None)
+SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
+SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
+if SMTP_PASSWORD:
+    SMTP_PASSWORD = SMTP_PASSWORD.replace(' ', '').strip()
+SMTP_USE_TLS = os.getenv('SMTP_USE_TLS', 'true').lower() in ('true', '1', 'yes')
+SMTP_USE_SSL = os.getenv('SMTP_USE_SSL', 'false').lower() in ('true', '1', 'yes')
+SMTP_FROM_EMAIL = os.getenv('SMTP_FROM_EMAIL') or SMTP_USERNAME or 'noreply@findrome.org'
+SMTP_FROM_NAME = os.getenv('SMTP_FROM_NAME', 'Findrome NMIMS Organizing Committee')
+
+def is_smtp_configured():
+    return bool(SMTP_SERVER and SMTP_USERNAME and SMTP_PASSWORD)
 
 
 @app.route('/health', methods=['GET'])
@@ -53,13 +74,13 @@ event_settings_col = db['event_settings']
 DEFAULT_EVENT_SETTINGS = {
     '_id': 'findrome_2026',
     'event_code': 'findrome_2026',
-    'event_name': 'Findrome',
+    'event_name': 'Fintalks / Finplay',
     'event_edition': '2026',
     'event_title': 'Annual Flagship Financial & Technology Conclave',
-    'event_dates': 'March 20 – 21, 2026',
-    'event_start_date': '2026-03-20',
-    'event_end_date': '2026-03-21',
-    'event_venue': 'NMIMS Mukesh Patel Auditorium, Mumbai',
+    'event_dates': 'September 28 – 29, 2026',
+    'event_start_date': '2026-09-28',
+    'event_end_date': '2026-09-29',
+    'event_venue': 'Mini Auditorium / Finplay: canopy area beside bread and brew',
     'event_subtitle': '',
     'collection_name': 'registrations',
     'created_at': '2026-03-01 00:00:00'
@@ -95,6 +116,19 @@ def init_event_defaults():
                     if active_cfg.get(k):
                         doc[k] = active_cfg[k]
             events_master_col.insert_one(doc)
+        else:
+            # Sync updated event details (name, edition, dates, venue) to active event
+            events_master_col.update_one(
+                {'_id': 'findrome_2026'},
+                {'$set': {
+                    'event_name': DEFAULT_EVENT_SETTINGS['event_name'],
+                    'event_edition': DEFAULT_EVENT_SETTINGS['event_edition'],
+                    'event_dates': DEFAULT_EVENT_SETTINGS['event_dates'],
+                    'event_start_date': DEFAULT_EVENT_SETTINGS['event_start_date'],
+                    'event_end_date': DEFAULT_EVENT_SETTINGS['event_end_date'],
+                    'event_venue': DEFAULT_EVENT_SETTINGS['event_venue']
+                }}
+            )
 
         active_cfg = event_settings_col.find_one({'_id': 'active_event_config'})
         if not active_cfg or not active_cfg.get('active_event_code'):
@@ -228,17 +262,313 @@ def format_doc(doc, cfg_or_event_code=None):
         cfg = get_event_settings(cfg_or_event_code or d.get('event_code'))
         
     if not d.get('event_dates'):
-        d['event_dates'] = cfg.get('event_dates', 'Event Dates TBA')
+        d['event_dates'] = cfg.get('event_dates', 'September 28 – 29, 2026')
     if not d.get('event_venue'):
-        d['event_venue'] = cfg.get('event_venue', 'NMIMS Mumbai Campus')
+        d['event_venue'] = cfg.get('event_venue', 'Mini Auditorium / Finplay: canopy area beside bread and brew')
     if not d.get('event_name'):
-        d['event_name'] = cfg.get('event_name', 'Findrome')
+        d['event_name'] = cfg.get('event_name', 'Fintalks / Finplay')
     if not d.get('event_edition'):
-        d['event_edition'] = cfg.get('event_edition', '')
+        d['event_edition'] = cfg.get('event_edition', '2026')
     if not d.get('event_code'):
         d['event_code'] = cfg.get('event_code', 'findrome_2026')
+    d.setdefault('reminder_sent_at', doc.get('reminder_sent_at'))
+    d.setdefault('reminder_count', doc.get('reminder_count', 0))
     return d
 
+
+# ─────────────────────────────────────────────────────────────
+# EVENT REMINDER EMAIL ENGINE (SMTP & TEST SIMULATION)
+# ─────────────────────────────────────────────────────────────
+
+def generate_reminder_email_content(attendee, ev_cfg, custom_message=None):
+    """Generates modern branded HTML & fallback plain-text reminder notice emails."""
+    name = attendee.get('name', 'Attendee')
+    reg_id = attendee.get('registration_id', 'PASS-PENDING')
+    sap_id = attendee.get('sap_id', '—')
+    event_name = ev_cfg.get('event_name', 'Fintalks / Finplay')
+    event_edition = ev_cfg.get('event_edition', '2026')
+    event_full_title = f"{event_name} {event_edition}".strip()
+    event_dates = ev_cfg.get('event_dates') or attendee.get('event_dates') or 'September 28 – 29, 2026'
+    event_venue = ev_cfg.get('event_venue') or attendee.get('event_venue') or 'Mini Auditorium / Finplay: canopy area beside bread and brew'
+    raw_slot = attendee.get('slot') or ''
+    college = attendee.get('college', 'NMIMS')
+    program = attendee.get('program', 'Degree')
+    branch = attendee.get('branch', 'Specialization')
+    year = attendee.get('year_of_study', '')
+    status = attendee.get('status', 'CONFIRMED')
+
+    # Format slot and timing cleanly based on official registration form options
+    # Form options: "28th | 2:00 PM – 4:00 PM" and "29th | 10:00 AM – 12:00 PM"
+    if '28' in raw_slot:
+        slot_clean = 'Monday, September 28, 2026 • 2:00 PM – 4:00 PM'
+        slot_short_time = '2:00 PM – 4:00 PM'
+        arrival_instruction = 'For Monday, you have to reach by 1:30 PM near the registration desk.'
+    elif '29' in raw_slot:
+        slot_clean = 'Tuesday, September 29, 2026 • 10:00 AM – 12:00 PM'
+        slot_short_time = '10:00 AM – 12:00 PM'
+        arrival_instruction = 'For Tuesday, you have to reach by 9:30 AM near the registration desk.'
+    elif raw_slot:
+        slot_clean = raw_slot
+        slot_short_time = raw_slot
+        arrival_instruction = 'For Monday, you have to reach by 1:30 PM near the registration desk.'
+    else:
+        slot_clean = 'September 28 – 29, 2026 (All Sessions)'
+        slot_short_time = 'your designated session'
+        arrival_instruction = 'For Monday, you have to reach by 1:30 PM near the registration desk.'
+
+    custom_block_html = ""
+    custom_block_text = ""
+    if custom_message and custom_message.strip():
+        clean_msg = custom_message.strip().replace('\n', '<br>')
+        custom_block_html = f"""
+        <div style="background: rgba(0, 223, 130, 0.08); border-left: 3px solid #00df82; border-radius: 0 8px 8px 0; padding: 14px 18px; margin: 20px 0; font-size: 14px; color: #d6f5e6; line-height: 1.5;">
+          <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: #00df82; margin-bottom: 4px; letter-spacing: 0.05em;">📢 Important Announcement for Attendees:</div>
+          <div>{clean_msg}</div>
+        </div>
+        """
+        custom_block_text = f"\nIMPORTANT ANNOUNCEMENT:\n{custom_message.strip()}\n"
+
+    status_badge_html = """<span style="font-size: 11px; font-weight: 700; color: #00df82; background: rgba(0, 223, 130, 0.15); border: 1px solid rgba(0, 223, 130, 0.35); padding: 3px 8px; border-radius: 4px; text-transform: uppercase;">REGISTERED ATTENDEE</span>"""
+    if status == 'CHECKED_IN':
+        status_badge_html = """<span style="font-size: 11px; font-weight: 700; color: #00df82; background: rgba(0, 223, 130, 0.25); border: 1px solid #00df82; padding: 3px 8px; border-radius: 4px; text-transform: uppercase;">✓ ADMITTED (SCANNED)</span>"""
+
+    html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Event Reminder: {event_full_title}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #070c09; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #e4ebe7;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #070c09; padding: 24px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 580px; background-color: #0e1512; border: 1px solid #1a2a22; border-radius: 12px; overflow: hidden; box-shadow: 0 16px 40px rgba(0,0,0,0.6);">
+          <tr>
+            <td height="4" style="background: linear-gradient(90deg, #00df82 0%, #00f08c 50%, #00b368 100%);"></td>
+          </tr>
+          <tr>
+            <td style="padding: 32px 28px 20px; text-align: center; border-bottom: 1px solid #19261f; background: linear-gradient(180deg, #121c17 0%, #0e1512 100%);">
+              <div style="display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #00df82; background: rgba(0, 223, 130, 0.12); border: 1px solid rgba(0, 223, 130, 0.28); border-radius: 20px; padding: 4px 14px; margin-bottom: 12px;">
+                ⏰ EVENT REMINDER NOTICE
+              </div>
+              <h1 style="font-size: 24px; font-weight: 700; color: #ffffff; margin: 0 0 6px; letter-spacing: -0.02em;">
+                Reminder: {event_full_title} is Approaching!
+              </h1>
+              <p style="font-size: 13.5px; color: #8ba094; margin: 0;">
+                📅 {event_dates} &bull; 📍 {event_venue}
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 28px 28px 24px;">
+              <p style="font-size: 15.5px; color: #ffffff; margin: 0 0 14px; font-weight: 600;">
+                Hello {name},
+              </p>
+              <p style="font-size: 14px; line-height: 1.6; color: #b8ccc1; margin: 0 0 20px;">
+                This is a reminder that you are registered for <strong>{event_full_title}</strong>. We are excited to see you there! Please take note of your scheduled timing, venue, and pass details below:
+              </p>
+
+              {custom_block_html}
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #131d18; border: 1px solid #23382c; border-radius: 10px; margin-bottom: 22px; overflow: hidden;">
+                <tr>
+                  <td style="padding: 16px 20px; border-bottom: 1px dashed #243b2e;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td>
+                          <div style="font-size: 10px; font-family: monospace; text-transform: uppercase; letter-spacing: 0.06em; color: #768f81;">YOUR REGISTERED PASS ID</div>
+                          <div style="font-family: monospace; font-size: 18px; font-weight: 700; color: #00df82; letter-spacing: 0.02em; margin-top: 2px;">{reg_id}</div>
+                        </td>
+                        <td align="right">
+                          {status_badge_html}
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding: 16px 20px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="font-size: 13px;">
+                      <tr>
+                        <td style="color: #768f81; width: 42%; padding: 5px 0;">Your Scheduled Timing:</td>
+                        <td style="color: #00df82; font-weight: 700;">{slot_clean}</td>
+                      </tr>
+                      <tr>
+                        <td style="color: #768f81; padding: 5px 0;">Candidate SAP ID:</td>
+                        <td style="color: #ffffff; font-weight: 600; font-family: monospace;">{sap_id}</td>
+                      </tr>
+                      <tr>
+                        <td style="color: #768f81; padding: 5px 0;">College / Institute:</td>
+                        <td style="color: #ffffff; font-weight: 500;">{college}</td>
+                      </tr>
+                      <tr>
+                        <td style="color: #768f81; padding: 5px 0;">Program & Branch:</td>
+                        <td style="color: #ffffff; font-weight: 500;">{program} ({branch} {year})</td>
+                      </tr>
+                      <tr>
+                        <td style="color: #768f81; padding: 5px 0;">Event Conclave Dates:</td>
+                        <td style="color: #ffffff; font-weight: 500;">{event_dates}</td>
+                      </tr>
+                      <tr>
+                        <td style="color: #768f81; padding: 5px 0;">Location / Venue:</td>
+                        <td style="color: #ffffff; font-weight: 500;">{event_venue}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background: rgba(255, 255, 255, 0.02); border: 1px solid #1a2a22; border-radius: 8px; margin-bottom: 22px;">
+                <tr>
+                  <td style="padding: 16px 18px;">
+                    <div style="font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #00df82; margin-bottom: 8px;">
+                      Event Day Reminders:
+                    </div>
+                    <ul style="margin: 0; padding-left: 18px; font-size: 13px; color: #a4b8ad; line-height: 1.6;">
+                      <li><strong>Arrival Time:</strong> {arrival_instruction}</li>
+                      <li>Carry your valid Student / NMIMS Photo ID Card for verification.</li>
+                      <li>Keep this Pass ID (<strong>{reg_id}</strong>) or your SAP ID ready on your phone at entry.</li>
+                    </ul>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="font-size: 13px; color: #8ba094; line-height: 1.5; margin: 0;">
+                If you have any questions or can no longer attend, please reach out to the Findrome organizing team. We look forward to seeing you at {event_full_title}!
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color: #090e0c; padding: 20px 28px; text-align: center; border-top: 1px solid #142019; font-size: 12px; color: #587063; line-height: 1.5;">
+              <div>Findrome Organizing Committee &bull; {event_full_title}</div>
+              <div style="margin-top: 4px; font-size: 11px; color: #43544b;">
+                You are receiving this reminder notice because you are registered with {attendee.get('email')}.
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
+
+    text_content = f"""EVENT REMINDER: {event_full_title}
+==================================================
+
+Hello {name},
+
+This is a reminder that you are registered for {event_full_title}!
+Event Dates: {event_dates}
+Location / Venue: {event_venue}
+{custom_block_text}
+YOUR SCHEDULE & PASS DETAILS:
+- Pass ID: {reg_id}
+- Scheduled Timing: {slot_clean}
+- Candidate SAP ID: {sap_id}
+- College: {college}
+- Program: {program} - {branch} {year}
+- Event Dates: {event_dates}
+- Location / Venue: {event_venue}
+- Status: {status}
+
+EVENT DAY REMINDERS:
+1. Arrival Time: {arrival_instruction}
+2. Carry your valid student photo ID card.
+3. Present your Pass ID ({reg_id}) or SAP ID at the scanner gate desk.
+
+We look forward to welcoming you!
+
+Best regards,
+Findrome Organizing Committee
+({event_full_title})
+"""
+    return html_content, text_content
+
+def send_single_reminder_email(attendee, ev_cfg, custom_message=None, subject_override=None, smtp_conn=None):
+    """Sends a personalized reminder email to one attendee via SMTP or simulated mode."""
+    to_email = (attendee.get('email') or '').strip()
+    if not to_email:
+        return {'success': False, 'message': 'No email address on record', 'to': ''}
+
+    name = attendee.get('name', 'Attendee')
+    event_name = ev_cfg.get('event_name', 'Fintalks / Finplay')
+    event_edition = ev_cfg.get('event_edition', '2026')
+    default_subject = f"⏰ Event Reminder: {event_name} {event_edition} is coming up!".strip()
+    subject = subject_override.strip() if (subject_override and subject_override.strip()) else default_subject
+
+    html_body, text_body = generate_reminder_email_content(attendee, ev_cfg, custom_message)
+
+    if is_smtp_configured():
+        try:
+            msg = MIMEMultipart('alternative')
+            msg['Subject'] = subject
+            msg['From'] = formataddr((SMTP_FROM_NAME, SMTP_FROM_EMAIL))
+            msg['To'] = formataddr((name, to_email))
+            msg.attach(MIMEText(text_body, 'plain', 'utf-8'))
+            msg.attach(MIMEText(html_body, 'html', 'utf-8'))
+
+            local_conn = None
+            conn = smtp_conn
+            if conn is None:
+                if SMTP_USE_SSL:
+                    local_conn = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=10)
+                else:
+                    local_conn = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=10)
+                    if SMTP_USE_TLS:
+                        local_conn.starttls()
+                local_conn.login(SMTP_USERNAME, SMTP_PASSWORD)
+                conn = local_conn
+
+            try:
+                conn.sendmail(SMTP_FROM_EMAIL, [to_email], msg.as_string())
+            except Exception as send_err:
+                if smtp_conn and conn == smtp_conn:
+                    print(f"SMTP connection dropped on {to_email} ({send_err}), reconnecting...")
+                    try:
+                        new_conn = get_bulk_smtp_connection()
+                        if new_conn:
+                            conn = new_conn
+                            conn.sendmail(SMTP_FROM_EMAIL, [to_email], msg.as_string())
+                        else:
+                            raise send_err
+                    except Exception:
+                        raise send_err
+                else:
+                    raise send_err
+
+            if local_conn:
+                try:
+                    local_conn.quit()
+                except Exception:
+                    pass
+
+            return {'success': True, 'mode': 'smtp', 'to': to_email}
+        except Exception as e:
+            print(f"SMTP send failure for {to_email}: {e}")
+            return {'success': False, 'mode': 'smtp', 'error': str(e), 'to': to_email}
+    else:
+        # Simulated test mode: log cleanly and report success
+        print(f"[SIMULATED REMINDER EMAIL] To: {to_email} ({name}) | Pass: {attendee.get('registration_id')} | Subject: {subject}")
+        return {'success': True, 'mode': 'simulated', 'to': to_email}
+
+def get_bulk_smtp_connection():
+    """Initializes a persistent connection for bulk dispatch to prevent reconnect overhead."""
+    if not is_smtp_configured():
+        return None
+    try:
+        if SMTP_USE_SSL:
+            conn = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=15)
+        else:
+            conn = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=15)
+            if SMTP_USE_TLS:
+                conn.starttls()
+        conn.login(SMTP_USERNAME, SMTP_PASSWORD)
+        return conn
+    except Exception as e:
+        print(f"Persistent SMTP connection notice: {e}")
+        return None
 
 
 # ─────────────────────────────────────────────────────────────
@@ -1027,7 +1357,9 @@ def admin_export_excel():
         'Admitted / Check-In Timestamp',
         'Registered At',
         'Event Name',
-        'Event Edition'
+        'Event Edition',
+        'Reminder Sent At',
+        'Reminder Count'
     ])
 
     cursor = col.find().sort([('_id', 1)])
@@ -1047,7 +1379,9 @@ def admin_export_excel():
             doc.get('checked_in_at', '') or '—',
             doc.get('timestamp', '') or doc.get('created_at', ''),
             doc.get('event_name', ev_cfg.get('event_name', '')),
-            doc.get('event_edition', ev_cfg.get('event_edition', ''))
+            doc.get('event_edition', ev_cfg.get('event_edition', '')),
+            doc.get('reminder_sent_at', '') or '—',
+            doc.get('reminder_count', 0)
         ])
 
     csv_data = output.getvalue()
@@ -1102,6 +1436,239 @@ def admin_toggle_checkin():
             {'$set': {'status': 'CHECKED_IN', 'checked_in_at': now_str}}
         )
         return jsonify({'success': True, 'status': 'CHECKED_IN', 'message': 'Attendee marked as Checked In.'})
+
+
+@app.route('/api/admin/smtp-status', methods=['GET'])
+def api_admin_smtp_status():
+    """Returns email delivery mode and SMTP server configuration status."""
+    if not session.get('admin_auth'):
+        return jsonify({'success': False, 'message': 'Admin authentication required.'}), 403
+
+    configured = is_smtp_configured()
+    return jsonify({
+        'success': True,
+        'is_configured': configured,
+        'server': SMTP_SERVER if configured else None,
+        'port': SMTP_PORT if configured else None,
+        'sender_email': SMTP_FROM_EMAIL if configured else None,
+        'sender_name': SMTP_FROM_NAME if configured else None,
+        'mode': 'smtp' if configured else 'simulated'
+    })
+
+
+# In-memory bulk reminder job tracker for high-capacity production dispatch
+_reminder_jobs = {}
+
+def _run_bulk_reminder_worker(job_id, recipients, ev_cfg, custom_message, subject_override, event_code):
+    """Executes bulk email dispatch in a background thread, updating live progress."""
+    job = _reminder_jobs.get(job_id)
+    if not job:
+        return
+
+    col = get_registrations_col(event_code)
+    smtp_conn = get_bulk_smtp_connection()
+    now_str = datetime.now().strftime('%b %d, %Y %I:%M %p')
+
+    for attendee in recipients:
+        try:
+            res = send_single_reminder_email(attendee, ev_cfg, custom_message, subject_override, smtp_conn=smtp_conn)
+            if res.get('success'):
+                job['sent_count'] += 1
+                try:
+                    col.update_one(
+                        {'_id': attendee['_id']},
+                        {
+                            '$set': {'reminder_sent_at': now_str},
+                            '$inc': {'reminder_count': 1}
+                        }
+                    )
+                except Exception as update_err:
+                    print(f"Notice updating reminder timestamp: {update_err}")
+            else:
+                job['failed_count'] += 1
+                if res.get('error'):
+                    job['errors'].append(f"{attendee.get('email')}: {res.get('error')}")
+        except Exception as item_err:
+            job['failed_count'] += 1
+            job['errors'].append(f"{attendee.get('email')}: {str(item_err)}")
+        
+        # Micro-sleep (25ms) between emails to prevent burst throttling
+        time.sleep(0.025)
+
+    if smtp_conn:
+        try:
+            smtp_conn.quit()
+        except Exception:
+            pass
+
+    job['status'] = 'completed'
+    job['finished_at'] = datetime.now().strftime('%b %d, %Y %I:%M %p')
+    job['reminder_sent_at'] = now_str
+
+
+@app.route('/api/admin/reminder-job/<job_id>', methods=['GET'])
+def api_admin_reminder_job(job_id):
+    """Returns real-time progress for an asynchronous bulk reminder dispatch job."""
+    if not session.get('admin_auth'):
+        return jsonify({'success': False, 'message': 'Admin authentication required.'}), 403
+    job = _reminder_jobs.get(job_id)
+    if not job:
+        return jsonify({'success': False, 'message': 'Reminder job not found.'}), 404
+    return jsonify({'success': True, 'job': job})
+
+
+@app.route('/api/admin/send-reminder', methods=['POST'])
+def api_admin_send_reminder():
+    """
+    Sends personalized reminder emails to attendees registered for the selected event.
+    Supports targeting all attendees, pending entry attendees, a single attendee,
+    or dispatching a sample test email to an administrator.
+    For large groups (>5), dispatches in a background thread to prevent cloud gateway timeouts.
+    """
+    if not session.get('admin_auth'):
+        return jsonify({'success': False, 'message': 'Admin authentication required.'}), 403
+
+    data = request.get_json() or {}
+    event_code = (data.get('event_code') or '').strip() or get_active_event_code()
+    target = data.get('target', 'all')  # 'all', 'pending', 'single'
+    target_reg_id = (data.get('registration_id') or '').strip()
+    custom_message = (data.get('custom_message') or '').strip()
+    subject_override = (data.get('subject') or '').strip()
+    test_email = (data.get('test_email') or '').strip()
+
+    col = get_registrations_col(event_code)
+    ev_cfg = get_event_settings(event_code)
+
+    # 1. Single test email directly to admin inbox
+    if test_email:
+        sample_doc = col.find_one() or {
+            'registration_id': 'FD-SAMPLE-2026',
+            'name': 'Sample Delegate',
+            'email': test_email,
+            'phone': '9876543210',
+            'sap_id': '70012023000',
+            'college': 'MPSTME',
+            'program': 'B.Tech',
+            'branch': 'Computer Science',
+            'year_of_study': '3rd Year',
+            'slot': '28th | 2:00 PM – 4:00 PM',
+            'status': 'CONFIRMED'
+        }
+        test_attendee = dict(sample_doc)
+        test_attendee['email'] = test_email
+        test_attendee['name'] = f"Admin Preview ({test_attendee.get('name')})"
+
+        res = send_single_reminder_email(test_attendee, ev_cfg, custom_message, subject_override)
+        if res.get('success'):
+            mode_desc = 'live via SMTP' if res.get('mode') == 'smtp' else 'in simulated test mode'
+            return jsonify({
+                'success': True,
+                'message': f"Test reminder email dispatched {mode_desc} to {test_email}!",
+                'sent_count': 1,
+                'mode': res.get('mode')
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': f"Failed to send test email: {res.get('error', 'SMTP dispatch failed')}",
+                'mode': res.get('mode')
+            }), 500
+
+    # 2. Build target query
+    query = {'email': {'$exists': True, '$ne': ''}}
+    if target == 'single':
+        if not target_reg_id:
+            return jsonify({'success': False, 'message': 'Registration ID is required for a single attendee reminder.'}), 400
+        query['registration_id'] = target_reg_id
+    elif target == 'pending':
+        query['status'] = {'$ne': 'CHECKED_IN'}
+
+    recipients = list(col.find(query))
+    if not recipients:
+        return jsonify({
+            'success': False,
+            'message': 'No registered attendees found matching the selected target criteria.'
+        }), 404
+
+    # 3. Asynchronous background dispatch for batches (>5 attendees) to prevent cloud HTTP gateway timeouts
+    is_async = (len(recipients) > 5) and not data.get('sync', False)
+
+    if is_async:
+        job_id = f"rem_{int(time.time())}_{uuid.uuid4().hex[:6]}"
+        _reminder_jobs[job_id] = {
+            'job_id': job_id,
+            'status': 'in_progress',
+            'sent_count': 0,
+            'failed_count': 0,
+            'total_target': len(recipients),
+            'errors': [],
+            'started_at': datetime.now().strftime('%b %d, %Y %I:%M %p'),
+            'finished_at': None,
+            'event_display_name': f"{ev_cfg.get('event_name', 'Event')} {ev_cfg.get('event_edition', '')}".strip()
+        }
+
+        thread = threading.Thread(
+            target=_run_bulk_reminder_worker,
+            args=(job_id, recipients, ev_cfg, custom_message, subject_override, event_code),
+            daemon=True
+        )
+        thread.start()
+
+        return jsonify({
+            'success': True,
+            'async': True,
+            'job_id': job_id,
+            'total_target': len(recipients),
+            'mode': 'smtp' if is_smtp_configured() else 'simulated',
+            'message': f"Bulk reminder dispatch for {len(recipients)} attendees started in background."
+        })
+
+    # 4. Synchronous dispatch for small batches or test runs
+    smtp_conn = get_bulk_smtp_connection()
+    sent_count = 0
+    failed_count = 0
+    errors = []
+
+    now_str = datetime.now().strftime('%b %d, %Y %I:%M %p')
+
+    for attendee in recipients:
+        res = send_single_reminder_email(attendee, ev_cfg, custom_message, subject_override, smtp_conn=smtp_conn)
+        if res.get('success'):
+            sent_count += 1
+            try:
+                col.update_one(
+                    {'_id': attendee['_id']},
+                    {
+                        '$set': {'reminder_sent_at': now_str},
+                        '$inc': {'reminder_count': 1}
+                    }
+                )
+            except Exception as update_err:
+                print(f"Notice updating reminder timestamp for {attendee.get('registration_id')}: {update_err}")
+        else:
+            failed_count += 1
+            if res.get('error'):
+                errors.append(f"{attendee.get('email')}: {res.get('error')}")
+
+    if smtp_conn:
+        try:
+            smtp_conn.quit()
+        except Exception:
+            pass
+
+    mode_label = 'live via SMTP' if is_smtp_configured() else 'simulated in test mode'
+    event_display_name = f"{ev_cfg.get('event_name', 'Event')} {ev_cfg.get('event_edition', '')}".strip()
+
+    return jsonify({
+        'success': True,
+        'sent_count': sent_count,
+        'failed_count': failed_count,
+        'total_target': len(recipients),
+        'mode': 'smtp' if is_smtp_configured() else 'simulated',
+        'reminder_sent_at': now_str,
+        'message': f"Reminder emails successfully sent to {sent_count} attendee(s) for {event_display_name} ({mode_label})!",
+        'errors': errors[:5] if errors else []
+    })
 
 
 if __name__ == '__main__':
