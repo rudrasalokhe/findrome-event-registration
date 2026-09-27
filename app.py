@@ -311,19 +311,19 @@ def generate_reminder_email_content(attendee, ev_cfg, custom_message=None):
     if '28' in raw_slot:
         slot_clean = 'Monday, September 28, 2026 • 2:00 PM – 4:00 PM'
         slot_short_time = '2:00 PM – 4:00 PM'
-        arrival_instruction = 'For Monday, you have to reach by 1:30 PM near the registration desk.'
+        arrival_instruction = 'Please be there at the registration desk by 1:30 PM for smooth entry.'
     elif '29' in raw_slot:
         slot_clean = 'Tuesday, September 29, 2026 • 10:00 AM – 12:00 PM'
         slot_short_time = '10:00 AM – 12:00 PM'
-        arrival_instruction = 'For Tuesday, you have to reach by 9:30 AM near the registration desk.'
+        arrival_instruction = 'Please be there at the registration desk by 9:30 AM for smooth entry.'
     elif raw_slot:
         slot_clean = raw_slot
         slot_short_time = raw_slot
-        arrival_instruction = 'For Monday, you have to reach by 1:30 PM near the registration desk.'
+        arrival_instruction = 'Please be there at the registration desk by 1:30 PM for smooth entry.'
     else:
         slot_clean = 'September 28 – 29, 2026 (All Sessions)'
-        slot_short_time = 'your designated session'
-        arrival_instruction = 'For Monday, you have to reach by 1:30 PM near the registration desk.'
+        slot_short_time = '1:30 PM'
+        arrival_instruction = 'Please be there at the registration desk by 1:30 PM for smooth entry.'
 
     custom_block_html = ""
     custom_block_text = ""

@@ -831,7 +831,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <div style="background: #111a15; border: 1px dashed rgba(0,223,130,0.3); padding: 8px; border-radius: 4px; font-family: monospace; font-size: 0.72rem; color: #fff;">
         <div style="color: var(--emerald); font-weight: 700;">YOUR REGISTERED PASS: FD-SAMPLE-2026</div>
         <div>Dates: ${escapeHtml(dates)}</div>
-        <div>Checklist: Carry college ID, for Monday reach by 1:30 PM near registration desk</div>
+        <div>Checklist: Carry college ID, be there at the registration desk by 1:30 PM for smooth entry</div>
       </div>
     `;
   }
