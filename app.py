@@ -24,16 +24,25 @@ app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'findrome_nmims_secret_key_2026')
 
 # SMTP Email Configuration for Event Reminders
-SMTP_USERNAME = os.getenv('SMTP_USERNAME') or os.getenv('SMTP_EMAIL')
-SMTP_SERVER = os.getenv('SMTP_SERVER') or ('smtp.gmail.com' if (SMTP_USERNAME and '@gmail.com' in SMTP_USERNAME.lower()) else None)
-SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
+SMTP_USERNAME = (os.getenv('SMTP_USERNAME') or os.getenv('SMTP_EMAIL') or '').strip() or None
+SMTP_SERVER = (os.getenv('SMTP_SERVER') or '').strip() or ('smtp.gmail.com' if (SMTP_USERNAME and '@gmail.com' in SMTP_USERNAME.lower()) else None)
+if SMTP_SERVER:
+    SMTP_SERVER = SMTP_SERVER.strip()
+
+_port_raw = (os.getenv('SMTP_PORT') or '587').strip()
+try:
+    SMTP_PORT = int(_port_raw)
+except ValueError:
+    SMTP_PORT = 587
+
 SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
 if SMTP_PASSWORD:
-    SMTP_PASSWORD = SMTP_PASSWORD.replace(' ', '').strip()
-SMTP_USE_TLS = os.getenv('SMTP_USE_TLS', 'true').lower() in ('true', '1', 'yes')
-SMTP_USE_SSL = os.getenv('SMTP_USE_SSL', 'false').lower() in ('true', '1', 'yes')
-SMTP_FROM_EMAIL = os.getenv('SMTP_FROM_EMAIL') or SMTP_USERNAME or 'noreply@findrome.org'
-SMTP_FROM_NAME = os.getenv('SMTP_FROM_NAME', 'Findrome NMIMS Organizing Committee')
+    SMTP_PASSWORD = SMTP_PASSWORD.replace(' ', '').replace('\n', '').replace('\r', '').strip()
+
+SMTP_USE_TLS = (os.getenv('SMTP_USE_TLS') or 'true').strip().lower() in ('true', '1', 'yes')
+SMTP_USE_SSL = (os.getenv('SMTP_USE_SSL') or 'false').strip().lower() in ('true', '1', 'yes')
+SMTP_FROM_EMAIL = (os.getenv('SMTP_FROM_EMAIL') or '').strip() or SMTP_USERNAME or 'noreply@findrome.org'
+SMTP_FROM_NAME = (os.getenv('SMTP_FROM_NAME') or 'Findrome Organizing Committee').strip()
 
 def is_smtp_configured():
     return bool(SMTP_SERVER and SMTP_USERNAME and SMTP_PASSWORD)
@@ -509,13 +518,15 @@ def send_single_reminder_email(attendee, ev_cfg, custom_message=None, subject_ov
             msg.attach(MIMEText(text_body, 'plain', 'utf-8'))
             msg.attach(MIMEText(html_body, 'html', 'utf-8'))
 
+            server_host = (SMTP_SERVER or 'smtp.gmail.com').strip()
+            server_port = int(SMTP_PORT or 587)
             local_conn = None
             conn = smtp_conn
             if conn is None:
                 if SMTP_USE_SSL:
-                    local_conn = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=10)
+                    local_conn = smtplib.SMTP_SSL(server_host, server_port, timeout=10)
                 else:
-                    local_conn = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=10)
+                    local_conn = smtplib.SMTP(server_host, server_port, timeout=10)
                     if SMTP_USE_TLS:
                         local_conn.starttls()
                 local_conn.login(SMTP_USERNAME, SMTP_PASSWORD)
@@ -557,11 +568,13 @@ def get_bulk_smtp_connection():
     """Initializes a persistent connection for bulk dispatch to prevent reconnect overhead."""
     if not is_smtp_configured():
         return None
+    server_host = (SMTP_SERVER or 'smtp.gmail.com').strip()
+    server_port = int(SMTP_PORT or 587)
     try:
         if SMTP_USE_SSL:
-            conn = smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=15)
+            conn = smtplib.SMTP_SSL(server_host, server_port, timeout=15)
         else:
-            conn = smtplib.SMTP(SMTP_SERVER, SMTP_PORT, timeout=15)
+            conn = smtplib.SMTP(server_host, server_port, timeout=15)
             if SMTP_USE_TLS:
                 conn.starttls()
         conn.login(SMTP_USERNAME, SMTP_PASSWORD)
